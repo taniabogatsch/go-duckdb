@@ -1,13 +1,8 @@
 name: Build static library dependencies
 on:
   workflow_dispatch:
-
   push:
-    branches-ignore:
-      - master
-    paths:
-      - ".github/workflows/**"
-      - "Makefile"
+
 jobs:
   prepare:
       runs-on: ubuntu-20.04
