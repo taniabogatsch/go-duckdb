@@ -1,7 +1,6 @@
 name: Build static library dependencies
 on:
   workflow_dispatch:
-  push:
 
 jobs:
   prepare:
