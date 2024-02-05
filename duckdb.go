@@ -6,6 +6,7 @@ package duckdb
 
 /*
 #include <duckdb.h>
+#include <stdlib.h>
 */
 import "C"
 

@@ -2,9 +2,9 @@ package duckdb
 
 /*
 #include <duckdb.h>
+#include <stdlib.h>
 */
 import "C"
-
 import (
 	"database/sql/driver"
 	"errors"

@@ -3,6 +3,7 @@ package duckdb
 /*
 #include <duckdb.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #ifndef ARROW_C_DATA_INTERFACE
 #define ARROW_C_DATA_INTERFACE
