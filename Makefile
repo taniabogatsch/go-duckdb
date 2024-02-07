@@ -1,5 +1,6 @@
 DUCKDB_REPO=https://github.com/duckdb/duckdb.git
 DUCKDB_BRANCH=main
+DUCKDB_VERSION=0.9.2
 
 .PHONY: install
 install:
@@ -24,13 +25,9 @@ deps.darwin.amd64:
 
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
 	cd duckdb && \
-	CFLAGS="-target x86_64-apple-macos11 -O3" CXXFLAGS="-target x86_64-apple-macos11 -O3" BUILD_SHELL=0 BUILD_UNITTESTS=0 make -j 2 && \
-	mkdir -p lib && \
-	for f in `find . -name '*.o'`; do cp $$f lib; done && \
-	cd lib && \
-	ar rvs ../libduckdb.a *.o && \
-	cd .. && \
-	mv libduckdb.a ../deps/darwin_amd64/libduckdb.a
+	git apply ../duckdb-make-bundle-library.patch && \
+	CFLAGS="-target x86_64-apple-macos11 -O3" CXXFLAGS="-target x86_64-apple-macos11 -O3" BUILD_SHELL=0 BUILD_UNITTESTS=0 make bundle-library -j 2
+	cp duckdb/build/release/libduckdb_bundle.a deps/darwin_amd64/libduckdb.a
 
 .PHONY: deps.darwin.arm64
 deps.darwin.arm64:
@@ -38,13 +35,9 @@ deps.darwin.arm64:
 
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
 	cd duckdb && \
-	CFLAGS="-target arm64-apple-macos11 -O3" CXXFLAGS="-target arm64-apple-macos11 -O3" BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any make -j 2 && \
-	mkdir -p lib && \
-	for f in `find . -name '*.o'`; do cp $$f lib; done && \
-	cd lib && \
-	ar rvs ../libduckdb.a *.o && \
-	cd .. && \
-	mv libduckdb.a ../deps/darwin_arm64/libduckdb.a
+	git apply ../duckdb-make-bundle-library.patch && \
+	CFLAGS="-target arm64-apple-macos11 -O3" CXXFLAGS="-target arm64-apple-macos11 -O3" BUILD_SHELL=0 BUILD_UNITTESTS=0 make bundle-library -j 2
+	cp duckdb/build/release/libduckdb_bundle.a deps/darwin_arm64/libduckdb.a
 
 .PHONY: deps.linux.amd64
 deps.linux.amd64:
@@ -52,14 +45,9 @@ deps.linux.amd64:
 
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
 	cd duckdb && \
-	CFLAGS="-O3" CXXFLAGS="-O3" make -j 2 && \
-	BUILD_SHELL=0 BUILD_UNITTESTS=0 make -j 2 && \
-	mkdir -p lib && \
-	for f in `find . -name '*.o'`; do cp $$f lib; done && \
-	cd lib && \
-	ar rvs ../libduckdb.a *.o && \
-	cd .. && \
-	mv libduckdb.a ../deps/linux_amd64/libduckdb.a
+	git apply ../duckdb-make-bundle-library.patch && \
+	CFLAGS="-O3" CXXFLAGS="-O3" BUILD_SHELL=0 BUILD_UNITTESTS=0 make bundle-library -j 2
+	cp duckdb/build/release/libduckdb_bundle.a deps/linux_amd64/libduckdb.a
 
 .PHONY: deps.linux.arm64
 deps.linux.arm64:
@@ -67,13 +55,9 @@ deps.linux.arm64:
 
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
 	cd duckdb && \
-	CC="aarch64-linux-gnu-gcc" CXX="aarch64-linux-gnu-g++" CFLAGS="-O3" CXXFLAGS="-O3" BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any make -j 2 && \
-	mkdir -p lib && \
-	for f in `find . -name '*.o'`; do cp $$f lib; done && \
-	cd lib && \
-	ar rvs ../libduckdb.a *.o && \
-	cd .. && \
-	mv libduckdb.a ../deps/linux_arm64/libduckdb.a
+	git apply ../duckdb-make-bundle-library.patch && \
+	CC="aarch64-linux-gnu-gcc" CXX="aarch64-linux-gnu-g++" CFLAGS="-O3" CXXFLAGS="-O3" BUILD_SHELL=0 BUILD_UNITTESTS=0 make bundle-library -j 2
+	cp duckdb/build/release/libduckdb_bundle.a deps/linux_arm64/libduckdb.a
 
 .PHONY: deps.freebsd.amd64
 deps.freebsd.amd64:
@@ -81,11 +65,6 @@ deps.freebsd.amd64:
 
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
 	cd duckdb && \
-	CFLAGS="-O3" CXXFLAGS="-O3" gmake -j 2 && \
-	BUILD_SHELL=0 BUILD_UNITTESTS=0 gmake -j 2 && \
-	mkdir -p lib && \
-	for f in `find . -name '*.o'`; do cp $$f lib; done && \
-	cd lib && \
-	ar rvs ../libduckdb.a *.o && \
-	cd .. && \
-	mv libduckdb.a ../deps/freebsd_amd64/libduckdb.a
+	git apply ../duckdb-make-bundle-library.patch && \
+	CC="aarch64-linux-gnu-gcc" CXX="aarch64-linux-gnu-g++" CFLAGS="-O3" CXXFLAGS="-O3" BUILD_SHELL=0 BUILD_UNITTESTS=0 make bundle-library -j 2
+	cp duckdb/build/release/libduckdb_bundle.a deps/linux_arm64/libduckdb.a
