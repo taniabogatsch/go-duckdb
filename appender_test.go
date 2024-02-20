@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/google/uuid"
 	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/require"
 )
@@ -492,6 +492,63 @@ func TestAppenderNullList(t *testing.T) {
 	strResult = append(strResult, "<nil>")
 	strResult = append(strResult, "[<nil> [[2]]]")
 	strResult = append(strResult, "[[<nil> [3]] [[4]]]")
+
+	i := 0
+	for res.Next() {
+		var strS string
+		var intS []any
+		err := res.Scan(
+			&intS,
+		)
+		if err != nil {
+			strS = "<nil>"
+		} else {
+			strS = fmt.Sprintf("%v", intS)
+		}
+
+		require.Equal(t, strResult[i], strS, fmt.Sprintf("row %d: expected %v, got %v", i, strResult[i], strS))
+		i++
+	}
+}
+
+func TestAppenderNullBasicList(t *testing.T) {
+	connector, con, appender := prepareAppender(t, `CREATE TABLE test (int_slice bigint[])`)
+	defer con.Close()
+	defer connector.Close()
+
+	// An empty list must also initialize the logical types.
+	err := appender.AppendRow([]int64{})
+	require.NoError(t, err)
+
+	err = appender.AppendRow([]int64{1, 2, 3})
+	require.NoError(t, err)
+
+	err = appender.AppendRow(nil)
+	require.NoError(t, err)
+
+	p := func(i int64) *int64 {
+		return &i
+	}
+
+	err = appender.AppendRow([]*int64{p(1), p(2), nil, p(4)})
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	// Verify results.
+	db := sql.OpenDB(connector)
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT int_slice FROM test`)
+	require.NoError(t, err)
+	defer res.Close()
+
+	var strResult []string
+	strResult = append(strResult, "[]")
+	strResult = append(strResult, "[1 2 3]")
+	strResult = append(strResult, "<nil>")
+	strResult = append(strResult, "[1 2 <nil> 4]")
 
 	i := 0
 	for res.Next() {

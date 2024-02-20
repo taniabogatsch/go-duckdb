@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -376,9 +377,7 @@ func (a *Appender) initColInfos(logicalType C.duckdb_logical_type, colIdx int) (
 		if !found {
 			name = "unknown type"
 		}
-		err := errors.New(
-			fmt.Sprintf("the appender does not support the column type of column %d: %s", colIdx, name))
-		return colInfo{}, err
+		return colInfo{}, fmt.Errorf("the appender does not support the column type of column %d: %s", colIdx, name)
 	}
 }
 
@@ -460,7 +459,16 @@ func setList(a *Appender, info *colInfo, rowIdx C.idx_t, value driver.Value) {
 
 	// Convert the refVal to []any to iterate over it.
 	values := make([]any, refVal.Len())
+	isPtr := reflect.TypeOf(value).Elem().Kind() == reflect.Ptr
 	for i := 0; i < refVal.Len(); i++ {
+		if isPtr {
+			if refVal.Index(i).IsNil() {
+				continue // leave values[i] as nil
+			}
+			values[i] = refVal.Index(i).Elem().Interface()
+			continue
+		}
+
 		values[i] = refVal.Index(i).Interface()
 	}
 
@@ -481,6 +489,11 @@ func setList(a *Appender, info *colInfo, rowIdx C.idx_t, value driver.Value) {
 	// Insert the values into the child vector.
 	for i, e := range values {
 		childVectorRow := C.idx_t(i) + childVectorSize
+
+		if e == nil {
+			setNull(&childInfo, childVectorRow)
+			continue
+		}
 		childInfo.fn(a, &childInfo, childVectorRow, e)
 	}
 }
@@ -509,11 +522,12 @@ func goTypeToString(v reflect.Type) string {
 		return "time.Time"
 	}
 
-	if v.Kind() == reflect.Slice {
+	switch v.Kind() {
+	case reflect.Ptr:
+		return "*" + goTypeToString(v.Elem())
+	case reflect.Slice:
 		return "[]" + goTypeToString(v.Elem())
-	}
-
-	if v.Kind() == reflect.Struct {
+	case reflect.Struct:
 		s := "{"
 		for i := 0; i < v.NumField(); i++ {
 			if i > 0 {
@@ -523,9 +537,9 @@ func goTypeToString(v reflect.Type) string {
 		}
 		s += "}"
 		return s
+	default:
+		return v.String()
 	}
-
-	return v.String()
 }
 
 func (c *colInfo) typeMatch(v reflect.Type) error {
@@ -533,6 +547,10 @@ func (c *colInfo) typeMatch(v reflect.Type) error {
 	expected := c.duckDBTypeToString()
 
 	if actual != expected {
+		if strings.HasPrefix(expected, "[]") && actual == "[]*"+strings.TrimPrefix(expected, "[]") { // if list, accept pointer
+			return nil
+		}
+
 		return fmt.Errorf("expected: %s, actual: %s", expected, actual)
 	}
 	return nil
