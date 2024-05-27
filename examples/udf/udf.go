@@ -11,14 +11,21 @@ import (
 	"github.com/marcboeker/go-duckdb"
 )
 
+func checkError(args ...interface{}) {
+	err := args[len(args)-1]
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 var db *sql.DB
 
 type user struct {
-	name    string
-	age     int
-	height  float32
-	awesome bool
-	bday    time.Time
+	name     string
+	age      int
+	height   float32
+	awesome  bool
+	birthday time.Time
 }
 
 type tableUDF struct {
@@ -54,8 +61,8 @@ func (d *tableUDF) FillRow(row duckdb.Row) (bool, error) {
 		return false, nil
 	}
 	d.count++
-	duckdb.SetRowValue(row, 0, d.count)
-	return true, nil
+	err := duckdb.SetRowValue(row, 0, d.count)
+	return true, err
 }
 
 func (d *tableUDF) Cardinality() *duckdb.CardinalityData {
@@ -68,25 +75,22 @@ func (d *tableUDF) Cardinality() *duckdb.CardinalityData {
 func main() {
 	var err error
 	db, err = sql.Open("duckdb", "?access_mode=READ_WRITE")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
+	checkError(err)
+	checkError(db.Ping())
+	defer checkError(db.Close())
+
 	conn, _ := db.Conn(context.Background())
 	var fun tableUDF
-	duckdb.RegisterTableUDF(conn, "whoo", &fun)
+	err = duckdb.RegisterTableUDF(conn, "my_table_udf", &fun)
+	checkError(err)
 
-	check(db.Ping())
+	rows, err := db.QueryContext(context.Background(), "SELECT * FROM my_table_udf(100)")
+	checkError(err)
+	defer checkError(rows.Close())
 
-	rows, err := db.QueryContext(context.Background(), "SELECT * FROM whoo(100)")
-	check(err)
-	defer rows.Close()
-
-	// Get column names
+	// Get the column names.
 	columns, err := rows.Columns()
-	if err != nil {
-		panic(err.Error())
-	}
+	checkError(err)
 
 	values := make([]interface{}, len(columns))
 	scanArgs := make([]interface{}, len(values))
@@ -94,12 +98,9 @@ func main() {
 		scanArgs[i] = &values[i]
 	}
 
-	// Fetch rows
+	// Fetch the rows.
 	for rows.Next() {
-		err = rows.Scan(scanArgs...)
-		if err != nil {
-			panic(err.Error())
-		}
+		checkError(rows.Scan(scanArgs...))
 		for i, value := range values {
 			switch value.(type) {
 			case nil:
@@ -112,12 +113,5 @@ func main() {
 			fmt.Printf("\nType: %s\n", reflect.TypeOf(value))
 		}
 		fmt.Println("-----------------------------------")
-	}
-}
-
-func check(args ...interface{}) {
-	err := args[len(args)-1]
-	if err != nil {
-		panic(err)
 	}
 }

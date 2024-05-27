@@ -303,6 +303,12 @@ func setPrimitive[T any](vec *vector, rowIdx C.idx_t, val any) {
 	xs[rowIdx] = val.(T)
 }
 
+//func _setPrimitive[T any](vec *vector, rowIdx C.idx_t, val T) {
+//	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
+//	xs := (*[1 << 31]T)(ptr)
+//	xs[rowIdx] = val
+//}
+
 func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 	if val == nil {
 		vec.setNull(rowIdx)
@@ -486,13 +492,13 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type) error {
 	return nil
 }
 
-func _setPrimitive[T any](vec *vector, rowIdx C.idx_t, val T) {
-	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
-	xs := (*[1 << 31]T)(ptr)
-	xs[rowIdx] = val
-}
+//func _setPrimitive[T any](vec *vector, rowIdx C.idx_t, val T) {
+//	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
+//	xs := (*[1 << 31]T)(ptr)
+//	xs[rowIdx] = val
+//}
 
-func _setVectorNumeric[S any, T numericType](vec *vector, rowIdx C.idx_t, val S) error {
+func _setVectorNumeric[T numericType](vec *vector, rowIdx C.idx_t, val any) error {
 	var fv T
 	switch v := any(val).(type) {
 	case uint8:
@@ -528,7 +534,7 @@ func _setVectorNumeric[S any, T numericType](vec *vector, rowIdx C.idx_t, val S)
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
 	}
-	_setPrimitive(vec, rowIdx, fv)
+	setPrimitive[T](vec, rowIdx, val)
 	return nil
 }
 
