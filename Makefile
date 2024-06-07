@@ -16,7 +16,7 @@ test:
 .PHONY: deps.header
 deps.header:
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
-	cp duckdb/src/include/duckdb.h duckdb.h
+	sed 's/__declspec(dllimport)//g' duckdb/src/include/duckdb.h > duckdb.h
 
 .PHONY: duckdb
 duckdb:
@@ -64,3 +64,14 @@ deps.freebsd.amd64: duckdb
 	cd duckdb && \
 	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} gmake bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/freebsd_amd64/libduckdb.a
+
+.PHONY: deps.windows.amd64
+deps.windows.amd64:
+	python scripts/windows_ci.py && \
+	cd duckdb && \
+	cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 \
+	-DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 \
+	-DDUCKDB_EXTENSION_CONFIGS=".github/config/bundled_extensions.cmake" \
+	-DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="v1.0.0" && \
+    cmake --build . --config Release
+	sed 's/__declspec(dllimport)//g' duckdb/build/release/libduckdb_bundle.a > deps/windows_amd64/libduckdb.a
