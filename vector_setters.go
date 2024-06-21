@@ -136,8 +136,7 @@ func (vec *vector) setEnum(internalType C.duckdb_type, rowIdx C.idx_t, val any) 
 	}
 }
 
-func (vec *vector) setList(rowIdx C.idx_t, val any) {
-	list := val.([]any)
+func genericSetList[T any](vec *vector, rowIdx C.idx_t, list []T) {
 	childVectorSize := C.duckdb_list_vector_get_size(vec.duckdbVector)
 
 	// Set the offset and length of the list vector using the current size of the child vector.
@@ -156,6 +155,45 @@ func (vec *vector) setList(rowIdx C.idx_t, val any) {
 	for i, entry := range list {
 		offset := C.idx_t(i) + childVectorSize
 		childVector.setFn(childVector, offset, entry)
+	}
+}
+
+func (vec *vector) setList(rowIdx C.idx_t, val any) {
+	// Unsafe code paths allow one-level nested lists without transforming them during casting.
+	switch v := val.(type) {
+	case []bool:
+		genericSetList[bool](vec, rowIdx, v)
+	case []int8:
+		genericSetList[int8](vec, rowIdx, v)
+	case []int16:
+		genericSetList[int16](vec, rowIdx, v)
+	case []int32:
+		genericSetList[int32](vec, rowIdx, v)
+	case []int64:
+		genericSetList[int64](vec, rowIdx, v)
+	case []uint8:
+		genericSetList[uint8](vec, rowIdx, v)
+	case []uint16:
+		genericSetList[uint16](vec, rowIdx, v)
+	case []uint32:
+		genericSetList[uint32](vec, rowIdx, v)
+	case []uint64:
+		genericSetList[uint64](vec, rowIdx, v)
+	case []float32:
+		genericSetList[float32](vec, rowIdx, v)
+	case []float64:
+		genericSetList[float64](vec, rowIdx, v)
+	case []time.Time:
+		genericSetList[time.Time](vec, rowIdx, v)
+	case []Interval:
+		genericSetList[Interval](vec, rowIdx, v)
+	case []map[string]any:
+		genericSetList[map[string]any](vec, rowIdx, v)
+	case []Map:
+		genericSetList[Map](vec, rowIdx, v)
+	default:
+		// We assume []any, as this is the type-safe code path.
+		genericSetList[any](vec, rowIdx, val.([]any))
 	}
 }
 

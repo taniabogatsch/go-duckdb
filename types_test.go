@@ -162,37 +162,68 @@ func testTypesReset[T require.TestingT](t T, c *Connector) {
 	require.NoError(t, err)
 }
 
-func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows []testTypesRow) []testTypesRow {
+func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows []testTypesRow, safe bool) []testTypesRow {
 	// Append the rows. We cannot append Composite types.
 	for i := 0; i < len(expectedRows); i++ {
 		r := &expectedRows[i]
-		err := a.AppendRow(
-			r.Boolean_col,
-			r.Tinyint_col,
-			r.Smallint_col,
-			r.Integer_col,
-			r.Bigint_col,
-			r.Utinyint_col,
-			r.Usmallint_col,
-			r.Uinteger_col,
-			r.Ubigint_col,
-			r.Float_col,
-			r.Double_col,
-			r.Timestamp_col,
-			r.Date_col,
-			r.Time_col,
-			r.Interval_col,
-			r.Hugeint_col,
-			r.Varchar_col,
-			r.Blob_col,
-			r.Timestamp_s_col,
-			r.Timestamp_ms_col,
-			r.Timestamp_ns_col,
-			string(r.Enum_col),
-			r.List_col.Get(),
-			r.Struct_col.Get(),
-			r.Map_col,
-			r.Timestamp_tz_col)
+		var err error
+		if safe {
+			err = a.AppendRow(
+				r.Boolean_col,
+				r.Tinyint_col,
+				r.Smallint_col,
+				r.Integer_col,
+				r.Bigint_col,
+				r.Utinyint_col,
+				r.Usmallint_col,
+				r.Uinteger_col,
+				r.Ubigint_col,
+				r.Float_col,
+				r.Double_col,
+				r.Timestamp_col,
+				r.Date_col,
+				r.Time_col,
+				r.Interval_col,
+				r.Hugeint_col,
+				r.Varchar_col,
+				r.Blob_col,
+				r.Timestamp_s_col,
+				r.Timestamp_ms_col,
+				r.Timestamp_ns_col,
+				string(r.Enum_col),
+				r.List_col.Get(),
+				r.Struct_col.Get(),
+				r.Map_col,
+				r.Timestamp_tz_col)
+		} else {
+			err = a.AppendRowUnsafe(
+				r.Boolean_col,
+				r.Tinyint_col,
+				r.Smallint_col,
+				r.Integer_col,
+				r.Bigint_col,
+				r.Utinyint_col,
+				r.Usmallint_col,
+				r.Uinteger_col,
+				r.Ubigint_col,
+				r.Float_col,
+				r.Double_col,
+				r.Timestamp_col,
+				r.Date_col,
+				r.Time_col,
+				r.Interval_col,
+				r.Hugeint_col,
+				r.Varchar_col,
+				r.Blob_col,
+				r.Timestamp_s_col,
+				r.Timestamp_ms_col,
+				r.Timestamp_ns_col,
+				string(r.Enum_col),
+				r.List_col.Get(),
+				r.Struct_col.Get(),
+				r.Map_col,
+				r.Timestamp_tz_col)
+		}
 		require.NoError(t, err)
 	}
 	require.NoError(t, a.Flush())
@@ -240,11 +271,10 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 	return actualRows
 }
 
-func TestTypes(t *testing.T) {
-	t.Parallel()
+func testTypesInternal(t *testing.T, safe bool) {
 	expectedRows := testTypesGenerateRows(t, 3)
 	c, con, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
-	actualRows := testTypes(t, c, a, expectedRows)
+	actualRows := testTypes(t, c, a, expectedRows, safe)
 
 	for i := range actualRows {
 		expectedRows[i].toUTC()
@@ -255,6 +285,12 @@ func TestTypes(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
+func TestTypes(t *testing.T) {
+	t.Parallel()
+	testTypesInternal(t, true)
+	testTypesInternal(t, false)
+}
+
 // NOTE: go-duckdb only contains very few benchmarks. The purpose of those benchmarks is to avoid regressions
 // of its main functionalities. I.e., functions related to implementing the database/sql interface.
 
@@ -262,8 +298,9 @@ func BenchmarkTypes(b *testing.B) {
 	expectedRows := testTypesGenerateRows(b, GetDataChunkCapacity()*3+10)
 	c, con, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
 
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_ = testTypes(b, c, a, expectedRows)
+		_ = testTypes(b, c, a, expectedRows, false)
 		testTypesReset(b, c)
 	}
 	cleanupAppender(b, c, con, a)

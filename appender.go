@@ -130,7 +130,21 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 		return getError(errAppenderAppendAfterClose, nil)
 	}
 
-	err := a.appendRowSlice(args)
+	err := a.appendRowSlice(args, true)
+	if err != nil {
+		return getError(errAppenderAppendRow, err)
+	}
+	return nil
+}
+
+// AppendRowUnsafe loads a row of values into the appender. The values are provided as separate arguments.
+// Panics on casting errors.
+func (a *Appender) AppendRowUnsafe(args ...driver.Value) error {
+	if a.closed {
+		return getError(errAppenderAppendAfterClose, nil)
+	}
+
+	err := a.appendRowSlice(args, false)
 	if err != nil {
 		return getError(errAppenderAppendRow, err)
 	}
@@ -146,7 +160,7 @@ func (a *Appender) addDataChunk() error {
 	return nil
 }
 
-func (a *Appender) appendRowSlice(args []driver.Value) error {
+func (a *Appender) appendRowSlice(args []driver.Value, safe bool) error {
 	// Early-out, if the number of args does not match the column count.
 	if len(args) != len(a.types) {
 		return columnCountError(len(args), len(a.types))
@@ -163,7 +177,7 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 	// Set all values.
 	for i, val := range args {
 		chunk := &a.chunks[len(a.chunks)-1]
-		err := chunk.SetValue(i, a.rowCount, val)
+		err := chunk.setValue(i, a.rowCount, val, safe)
 		if err != nil {
 			return err
 		}
