@@ -187,10 +187,20 @@ func (vec *vector) setList(rowIdx C.idx_t, val any) {
 		genericSetList[time.Time](vec, rowIdx, v)
 	case []Interval:
 		genericSetList[Interval](vec, rowIdx, v)
+	case []*big.Int:
+		genericSetList[*big.Int](vec, rowIdx, v)
+	case []string:
+		genericSetList[string](vec, rowIdx, v)
+	case [][]byte:
+		genericSetList[[]byte](vec, rowIdx, v)
+	case []Decimal:
+		genericSetList[Decimal](vec, rowIdx, v)
 	case []map[string]any:
 		genericSetList[map[string]any](vec, rowIdx, v)
 	case []Map:
 		genericSetList[Map](vec, rowIdx, v)
+	case []UUID:
+		genericSetList[UUID](vec, rowIdx, v)
 	default:
 		// We assume []any, as this is the type-safe code path.
 		genericSetList[any](vec, rowIdx, val.([]any))

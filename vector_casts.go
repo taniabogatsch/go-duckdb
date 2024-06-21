@@ -19,7 +19,8 @@ func (vec *vector) tryCastUnsafe(val any) (any, error) {
 		// Multi-level nested list.
 		switch val.(type) {
 		case []bool, []int8, []int16, []int32, []int64, []uint8, []uint16, []uint32,
-			[]uint64, []float32, []float64, []time.Time, []Interval, []map[string]any, []Map:
+			[]uint64, []float32, []float64, []time.Time, []Interval, []*big.Int, []string,
+			[][]byte, []Decimal, []map[string]any, []Map, []UUID:
 			return val, nil
 		default:
 			return vec.tryCastList(val, false)
