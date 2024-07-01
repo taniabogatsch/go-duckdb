@@ -221,9 +221,9 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 
 	var pendingRes C.duckdb_pending_result
 	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
-		dbErr := getDuckDBError(C.GoString(C.duckdb_pending_error(pendingRes)))
+		err := duckdbError(C.duckdb_pending_error(pendingRes))
 		C.duckdb_destroy_pending(&pendingRes)
-		return nil, dbErr
+		return nil, err
 	}
 	defer C.duckdb_destroy_pending(&pendingRes)
 
@@ -254,7 +254,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 			return nil, ctx.Err()
 		}
 
-		err := getDuckDBError(C.GoString(C.duckdb_result_error(&res)))
+		err := duckdbError(C.duckdb_result_error(&res))
 		C.duckdb_destroy_result(&res)
 		return nil, err
 	}

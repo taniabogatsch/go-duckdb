@@ -48,7 +48,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 
 	parsedDSN, err := url.Parse(dsn)
 	if err != nil {
-		return nil, getError(errParseDSN, err)
+		return nil, getDriverError(errParseDSN, err)
 	}
 
 	config, err := prepareConfig(parsedDSN)
@@ -64,7 +64,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	defer C.duckdb_free(unsafe.Pointer(outError))
 
 	if state := C.duckdb_open_ext(connStr, &db, config, &outError); state == C.DuckDBError {
-		return nil, getError(errOpen, duckdbError(outError))
+		return nil, getDuckDBError(C.GoString(outError))
 	}
 
 	return &Connector{
@@ -85,7 +85,7 @@ func (*Connector) Driver() driver.Driver {
 func (c *Connector) Connect(context.Context) (driver.Conn, error) {
 	var duckdbCon C.duckdb_connection
 	if state := C.duckdb_connect(c.db, &duckdbCon); state == C.DuckDBError {
-		return nil, getError(errConnect, nil)
+		return nil, getDriverError(errConnect, nil)
 	}
 
 	con := &conn{duckdbCon: duckdbCon}
@@ -117,7 +117,7 @@ func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 	var config C.duckdb_config
 	if state := C.duckdb_create_config(&config); state == C.DuckDBError {
 		C.duckdb_destroy_config(&config)
-		return nil, getError(errCreateConfig, nil)
+		return nil, getDriverError(errCreateConfig, nil)
 	}
 
 	if err := setConfigOption(config, "duckdb_api", "go"); err != nil {
@@ -151,7 +151,7 @@ func setConfigOption(config C.duckdb_config, name string, option string) error {
 	state := C.duckdb_set_config(config, cName, cOption)
 	if state == C.DuckDBError {
 		C.duckdb_destroy_config(&config)
-		return getError(errSetConfig, fmt.Errorf("%s=%s", name, option))
+		return getDriverError(errSetConfig, fmt.Errorf("%s=%s", name, option))
 	}
 
 	return nil

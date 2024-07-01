@@ -7,17 +7,6 @@ import (
 	"strings"
 )
 
-func getError(errDriver error, err error) error {
-	if err == nil {
-		return fmt.Errorf("%s: %w", driverErrMsg, errDriver)
-	}
-	return fmt.Errorf("%s: %w: %s", driverErrMsg, errDriver, err.Error())
-}
-
-func duckdbError(err *C.char) error {
-	return fmt.Errorf("%s: %w", duckdbErrMsg, errors.New(C.GoString(err)))
-}
-
 func castError(actual string, expected string) error {
 	return fmt.Errorf("%s: cannot cast %s to %s", castErrMsg, actual, expected)
 }
@@ -46,8 +35,9 @@ func invalidatedAppenderError(err error) error {
 }
 
 const (
-	driverErrMsg           = "database/sql/driver"
-	duckdbErrMsg           = "duckdb error"
+	driverErrMsg = "database/sql/driver"
+	duckdbErrMsg = "duckdb error"
+
 	castErrMsg             = "cast error"
 	structFieldErrMsg      = "invalid STRUCT field"
 	columnErrMsg           = "column index"
@@ -80,54 +70,54 @@ var (
 	errCreateConfig = errors.New("could not create config for database")
 )
 
-type DuckDBErrorType int
+type ErrorType int
 
 const (
-	ErrorTypeInvalid              DuckDBErrorType = iota // invalid type
-	ErrorTypeOutOfRange                                  // value out of range error
-	ErrorTypeConversion                                  // conversion/casting error
-	ErrorTypeUnknownType                                 // unknown type error
-	ErrorTypeDecimal                                     // decimal related
-	ErrorTypeMismatchType                                // type mismatch
-	ErrorTypeDivideByZero                                // divide by 0
-	ErrorTypeObjectSize                                  // object size exceeded
-	ErrorTypeInvalidType                                 // incompatible for operation
-	ErrorTypeSerialization                               // serialization
-	ErrorTypeTransaction                                 // transaction management
-	ErrorTypeNotImplemented                              // method not implemented
-	ErrorTypeExpression                                  // expression parsing
-	ErrorTypeCatalog                                     // catalog related
-	ErrorTypeParser                                      // parser related
-	ErrorTypePlanner                                     // planner related
-	ErrorTypeScheduler                                   // scheduler related
-	ErrorTypeExecutor                                    // executor related
-	ErrorTypeConstraint                                  // constraint related
-	ErrorTypeIndex                                       // index related
-	ErrorTypeStat                                        // stat related
-	ErrorTypeConnection                                  // connection related
-	ErrorTypeSyntax                                      // syntax related
-	ErrorTypeSettings                                    // settings related
-	ErrorTypeBinder                                      // binder related
-	ErrorTypeNetwork                                     // network related
-	ErrorTypeOptimizer                                   // optimizer related
-	ErrorTypeNullPointer                                 // nullptr exception
-	ErrorTypeIO                                          // IO exception
-	ErrorTypeInterrupt                                   // interrupt
-	ErrorTypeFatal                                       // Fatal exceptions are non-recoverable, and render the entire DB in an unusable state
-	ErrorTypeInternal                                    // Internal exceptions indicate something went wrong internally (i.e. bug in the code base)
-	ErrorTypeInvalidInput                                // Input or arguments error
-	ErrorTypeOutOfMemory                                 // out of memory
-	ErrorTypePermission                                  // insufficient permissions
-	ErrorTypeParameterNotResolved                        // parameter types could not be resolved
-	ErrorTypeParameterNotAllowed                         // parameter types not allowed
-	ErrorTypeDependency                                  // dependency
+	ErrorTypeInvalid              ErrorType = iota // invalid type
+	ErrorTypeOutOfRange                            // value out of range error
+	ErrorTypeConversion                            // conversion/casting error
+	ErrorTypeUnknownType                           // unknown type error
+	ErrorTypeDecimal                               // decimal related
+	ErrorTypeMismatchType                          // type mismatch
+	ErrorTypeDivideByZero                          // divide by 0
+	ErrorTypeObjectSize                            // object size exceeded
+	ErrorTypeInvalidType                           // incompatible for operation
+	ErrorTypeSerialization                         // serialization
+	ErrorTypeTransaction                           // transaction management
+	ErrorTypeNotImplemented                        // method not implemented
+	ErrorTypeExpression                            // expression parsing
+	ErrorTypeCatalog                               // catalog related
+	ErrorTypeParser                                // parser related
+	ErrorTypePlanner                               // planner related
+	ErrorTypeScheduler                             // scheduler related
+	ErrorTypeExecutor                              // executor related
+	ErrorTypeConstraint                            // constraint related
+	ErrorTypeIndex                                 // index related
+	ErrorTypeStat                                  // stat related
+	ErrorTypeConnection                            // connection related
+	ErrorTypeSyntax                                // syntax related
+	ErrorTypeSettings                              // settings related
+	ErrorTypeBinder                                // binder related
+	ErrorTypeNetwork                               // network related
+	ErrorTypeOptimizer                             // optimizer related
+	ErrorTypeNullPointer                           // nullptr exception
+	ErrorTypeIO                                    // IO exception
+	ErrorTypeInterrupt                             // interrupt
+	ErrorTypeFatal                                 // Fatal exceptions are non-recoverable, and render the entire DB in an unusable state
+	ErrorTypeInternal                              // Internal exceptions indicate something went wrong internally (i.e. bug in the code base)
+	ErrorTypeInvalidInput                          // Input or arguments error
+	ErrorTypeOutOfMemory                           // out of memory
+	ErrorTypePermission                            // insufficient permissions
+	ErrorTypeParameterNotResolved                  // parameter types could not be resolved
+	ErrorTypeParameterNotAllowed                   // parameter types not allowed
+	ErrorTypeDependency                            // dependency
 	ErrorTypeHTTP
 	ErrorTypeMissingExtension // Thrown when an extension is used but not loaded
 	ErrorTypeAutoLoad         // Thrown when an extension is used but not loaded
 	ErrorTypeSequence
 )
 
-var errorPrefixMap = map[string]DuckDBErrorType{
+var errorPrefixMap = map[string]ErrorType{
 	"Invalid Error":                ErrorTypeInvalid,
 	"Out of Range Error":           ErrorTypeOutOfRange,
 	"Conversion Error":             ErrorTypeConversion,
@@ -172,32 +162,41 @@ var errorPrefixMap = map[string]DuckDBErrorType{
 	"Sequence Error":               ErrorTypeSequence,
 }
 
-type DuckDBError struct {
-	Type DuckDBErrorType
+type Error struct {
+	Type ErrorType
 	Msg  string
 }
 
-func (de *DuckDBError) Error() string {
+func (de *Error) Error() string {
 	return de.Msg
 }
 
-func (de *DuckDBError) Is(err error) bool {
-	if derr, ok := err.(*DuckDBError); ok {
-		return derr.Msg == de.Msg
+func (de *Error) Is(err error) bool {
+	if other, ok := err.(*Error); ok {
+		return other.Msg == de.Msg
 	}
 	return false
 }
 
-func getDuckDBError(errMsg string) error {
+func getDuckDBError(msg string) error {
 	errType := ErrorTypeInvalid
-	// find the end of the prefix ("<error-type> Error: ")
-	if idx := strings.Index(errMsg, ": "); idx != -1 {
-		if typ, ok := errorPrefixMap[errMsg[:idx]]; ok {
-			errType = typ
+
+	// Find the end of the prefix ("<error-type> Error: ").
+	if idx := strings.Index(msg, ": "); idx != -1 {
+		if t, ok := errorPrefixMap[msg[:idx]]; ok {
+			errType = t
 		}
 	}
-	return &DuckDBError{
+
+	return &Error{
 		Type: errType,
-		Msg:  errMsg,
+		Msg:  fmt.Sprintf("%s: %s", duckdbErrMsg, msg),
 	}
+}
+
+func getDriverError(errDriver error, err error) error {
+	if err == nil {
+		return fmt.Errorf("%s: %w", driverErrMsg, errDriver)
+	}
+	return fmt.Errorf("%s: %w: %s", driverErrMsg, errDriver, err.Error())
 }

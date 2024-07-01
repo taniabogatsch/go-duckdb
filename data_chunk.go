@@ -105,23 +105,22 @@ func (chunk *DataChunk) initFromDuckDataChunk(data C.duckdb_data_chunk) error {
 	chunk.columns = make([]vector, columnCount)
 	chunk.data = data
 
-	var err error
 	for i := 0; i < columnCount; i++ {
 		duckdbVector := C.duckdb_data_chunk_get_vector(data, C.idx_t(i))
 
 		// Initialize the callback functions to read and write values.
 		logicalType := C.duckdb_vector_get_column_type(duckdbVector)
-		err = chunk.columns[i].init(logicalType, i)
+		err := chunk.columns[i].init(logicalType, i)
 		C.duckdb_destroy_logical_type(&logicalType)
 		if err != nil {
-			break
+			return err
 		}
 
 		// Initialize the vectors and their child vectors.
 		chunk.columns[i].duckdbVector = duckdbVector
 		chunk.columns[i].getChildVectors(duckdbVector)
 	}
-	return err
+	return nil
 }
 
 func (chunk *DataChunk) close() {

@@ -356,8 +356,8 @@ func TestDuckDBErrors(t *testing.T) {
 }
 
 func TestGetDuckDBError(t *testing.T) {
-	// only for the corner cases
-	testCases := []*DuckDBError{
+	// Test the corner cases.
+	testCases := []DuckDBError{
 		{
 			Msg:  "",
 			Type: ErrorTypeInvalid,
@@ -367,16 +367,19 @@ func TestGetDuckDBError(t *testing.T) {
 			Type: ErrorTypeInvalid,
 		},
 		{
-			Msg:  "Error: xxx",
-			Type: ErrorTypeUnknownType,
-		},
-		// next two for the prefix testing
-		{
-			Msg:  "Invalid Error: xxx",
+			Msg:  ": Error:",
 			Type: ErrorTypeInvalid,
 		},
 		{
-			Msg:  "Invalid Input Error: xxx",
+			Msg:  "Error: ",
+			Type: ErrorTypeUnknownType,
+		},
+		{
+			Msg:  "Invalid Error: ",
+			Type: ErrorTypeInvalid,
+		},
+		{
+			Msg:  "Invalid Input Error: ",
 			Type: ErrorTypeInvalidInput,
 		},
 	}
