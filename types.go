@@ -13,18 +13,51 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-var unsupportedAppenderTypeMap = map[C.duckdb_type]string{
+// FIXME: Implement support for these types.
+var unsupportedTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_INVALID:  "INVALID",
-	C.DUCKDB_TYPE_TIME:     "TIME",
-	C.DUCKDB_TYPE_INTERVAL: "INTERVAL",
-	C.DUCKDB_TYPE_HUGEINT:  "HUGEINT",
 	C.DUCKDB_TYPE_UHUGEINT: "UHUGEINT",
-	C.DUCKDB_TYPE_DECIMAL:  "DECIMAL",
-	C.DUCKDB_TYPE_ENUM:     "ENUM",
-	C.DUCKDB_TYPE_MAP:      "MAP",
+	C.DUCKDB_TYPE_ARRAY:    "ARRAY",
 	C.DUCKDB_TYPE_UNION:    "UNION",
 	C.DUCKDB_TYPE_BIT:      "BIT",
 	C.DUCKDB_TYPE_TIME_TZ:  "TIME_TZ",
+}
+
+var duckdbTypeMap = map[C.duckdb_type]string{
+	C.DUCKDB_TYPE_INVALID:      "INVALID",
+	C.DUCKDB_TYPE_BOOLEAN:      "BOOLEAN",
+	C.DUCKDB_TYPE_TINYINT:      "TINYINT",
+	C.DUCKDB_TYPE_SMALLINT:     "SMALLINT",
+	C.DUCKDB_TYPE_INTEGER:      "INTEGER",
+	C.DUCKDB_TYPE_BIGINT:       "BIGINT",
+	C.DUCKDB_TYPE_UTINYINT:     "UTINYINT",
+	C.DUCKDB_TYPE_USMALLINT:    "USMALLINT",
+	C.DUCKDB_TYPE_UINTEGER:     "UINTEGER",
+	C.DUCKDB_TYPE_UBIGINT:      "UBIGINT",
+	C.DUCKDB_TYPE_FLOAT:        "FLOAT",
+	C.DUCKDB_TYPE_DOUBLE:       "DOUBLE",
+	C.DUCKDB_TYPE_TIMESTAMP:    "TIMESTAMP",
+	C.DUCKDB_TYPE_DATE:         "DATE",
+	C.DUCKDB_TYPE_TIME:         "TIME",
+	C.DUCKDB_TYPE_INTERVAL:     "INTERVAL",
+	C.DUCKDB_TYPE_HUGEINT:      "HUGEINT",
+	C.DUCKDB_TYPE_UHUGEINT:     "UHUGEINT",
+	C.DUCKDB_TYPE_VARCHAR:      "VARCHAR",
+	C.DUCKDB_TYPE_BLOB:         "BLOB",
+	C.DUCKDB_TYPE_DECIMAL:      "DECIMAL",
+	C.DUCKDB_TYPE_TIMESTAMP_S:  "TIMESTAMP_S",
+	C.DUCKDB_TYPE_TIMESTAMP_MS: "TIMESTAMP_MS",
+	C.DUCKDB_TYPE_TIMESTAMP_NS: "TIMESTAMP_NS",
+	C.DUCKDB_TYPE_ENUM:         "ENUM",
+	C.DUCKDB_TYPE_LIST:         "LIST",
+	C.DUCKDB_TYPE_STRUCT:       "STRUCT",
+	C.DUCKDB_TYPE_MAP:          "MAP",
+	C.DUCKDB_TYPE_ARRAY:        "ARRAY",
+	C.DUCKDB_TYPE_UUID:         "UUID",
+	C.DUCKDB_TYPE_UNION:        "UNION",
+	C.DUCKDB_TYPE_BIT:          "BIT",
+	C.DUCKDB_TYPE_TIME_TZ:      "TIMETZ",
+	C.DUCKDB_TYPE_TIMESTAMP_TZ: "TIMESTAMPTZ",
 }
 
 type numericType interface {
@@ -102,6 +135,14 @@ func (m *Map) Scan(v any) error {
 	return nil
 }
 
+func mapKeysField() string {
+	return "key"
+}
+
+func mapValuesField() string {
+	return "value"
+}
+
 type Interval struct {
 	Days   int32 `json:"days"`
 	Months int32 `json:"months"`
@@ -134,4 +175,8 @@ func (d *Decimal) Float64() float64 {
 	value.Quo(value, factor)
 	f, _ := value.Float64()
 	return f
+}
+
+func (d *Decimal) toString() string {
+	return fmt.Sprintf("DECIMAL(%d,%d)", d.Width, d.Scale)
 }

@@ -148,7 +148,7 @@ defer conn.Close()
 
 // obtain the Arrow from the connection
 arrow, err := duckdb.NewArrowFromConn(conn)
-if err != nil w
+if err != nil {
 	...
 }
 
@@ -161,6 +161,12 @@ defer rdr.Release()
 for rdr.Next() {
   // process records
 }
+```
+
+The Arrow interface is a heavy dependency. If you do not need it, you can disable it by passing `-tags=no_duckdb_arrow` to `go build`. This will be made opt-in in V2.
+
+```sh
+go build -tags="no_duckdb_arrow"
 ```
 
 ## Vendoring
