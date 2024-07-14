@@ -734,23 +734,24 @@ func TestAppenderDecimal(t *testing.T) {
 }
 
 var jsonInputs = [][]byte{
-	[]byte(`{"c1": 42, "l1": [1, 2, 3], "s1": {"a": 101, "b": ["hello", "world"]}, "l2": [{"a": [{"a": [4.2, 7.9]}]}]}`),
-	[]byte(`{"c1": null, "l1": [null, 2, null], "s1": {"a": null, "b": ["hello", null]}, "l2": [{"a": [{"a": [null, 7.9]}]}]}`),
-	[]byte(`{"c1": null, "l1": null, "s1": {"a": null, "b": null}, "l2": [{"a": [{"a": null}]}]}`),
-	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": [{"a": [null, {"a": null}]}]}`),
-	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": [{"a": null}]}`),
-	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": [null, null]}`),
-	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": null}`),
+	[]byte(`{"c1": 42, "l1": [1, 2, 3], "s1": {"a": 101, "b": ["hello", "world"]}, "l2": [{"a": [{"a": [4.2, 7.9]}]}], 
+			"ts1": "2018-12-10T13:49:51.141Z", "ts2": "2022-06-07T09:15:29.131Z"}`),
+	[]byte(`{"c1": null, "l1": [null, 2, null], "s1": {"a": null, "b": ["hello", null]}, "l2": [{"a": [{"a": [null, 7.9]}]}], "ts1": null, "ts2:" null}`),
+	[]byte(`{"c1": null, "l1": null, "s1": {"a": null, "b": null}, "l2": [{"a": [{"a": null}]}], "ts1": null, "ts2:" null}`),
+	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": [{"a": [null, {"a": null}]}], "ts1": null, "ts2:" null}`),
+	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": [{"a": null}], "ts1": null, "ts2:" null}`),
+	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": [null, null], "ts1": null, "ts2:" null}`),
+	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": null, "ts1": null, "ts2:" null}`),
 }
 
 var jsonResults = [][]string{
-	{"42", "[1 2 3]", "map[a:101 b:[hello world]]", "[map[a:[map[a:[4.2 7.9]]]]]"},
-	{"<nil>", "[<nil> 2 <nil>]", "map[a:<nil> b:[hello <nil>]]", "[map[a:[map[a:[<nil> 7.9]]]]]"},
-	{"<nil>", "<nil>", "map[a:<nil> b:<nil>]", "[map[a:[map[a:<nil>]]]]"},
-	{"<nil>", "<nil>", "<nil>", "[map[a:[<nil> map[a:<nil>]]]]"},
-	{"<nil>", "<nil>", "<nil>", "[map[a:<nil>]]"},
-	{"<nil>", "<nil>", "<nil>", "[<nil> <nil>]"},
-	{"<nil>", "<nil>", "<nil>", "<nil>"},
+	{"42", "[1 2 3]", "map[a:101 b:[hello world]]", "[map[a:[map[a:[4.2 7.9]]]]]", "<nil>", "<nil>"},
+	{"<nil>", "[<nil> 2 <nil>]", "map[a:<nil> b:[hello <nil>]]", "[map[a:[map[a:[<nil> 7.9]]]]]", "<nil>", "<nil>"},
+	{"<nil>", "<nil>", "map[a:<nil> b:<nil>]", "[map[a:[map[a:<nil>]]]]", "<nil>", "<nil>"},
+	{"<nil>", "<nil>", "<nil>", "[map[a:[<nil> map[a:<nil>]]]]", "<nil>", "<nil>"},
+	{"<nil>", "<nil>", "<nil>", "[map[a:<nil>]]", "<nil>", "<nil>"},
+	{"<nil>", "<nil>", "<nil>", "[<nil> <nil>]", "<nil>", "<nil>"},
+	{"<nil>", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>"},
 }
 
 func TestAppenderWithJSON(t *testing.T) {
@@ -760,16 +761,17 @@ func TestAppenderWithJSON(t *testing.T) {
 		    c1 UBIGINT,
 			l1 TINYINT[],
 			s1 STRUCT(a INTEGER, b VARCHAR[]),
-		    l2 STRUCT(a STRUCT(a FLOAT[])[])[]              
+		    l2 STRUCT(a STRUCT(a FLOAT[])[])[],
+		    ts1 TIME,
+		    ts2 TIMESTAMP,              
 	  	)`)
 
 	for _, jsonInput := range jsonInputs {
 		var jsonData map[string]interface{}
 		err := json.Unmarshal(jsonInput, &jsonData)
 		require.NoError(t, err)
-		require.NoError(t, a.AppendRow(jsonData["c1"], jsonData["l1"], jsonData["s1"], jsonData["l2"]))
+		require.NoError(t, a.AppendRow(jsonData["c1"], jsonData["l1"], jsonData["s1"], jsonData["l2"], jsonData["ts1"], jsonData["ts2"]))
 	}
-
 	require.NoError(t, a.Flush())
 
 	// Verify results.
@@ -779,17 +781,21 @@ func TestAppenderWithJSON(t *testing.T) {
 	i := 0
 	for res.Next() {
 		var (
-			c1 interface{}
-			l1 interface{}
-			s1 interface{}
-			l2 interface{}
+			c1  interface{}
+			l1  interface{}
+			s1  interface{}
+			l2  interface{}
+			ts1 interface{}
+			ts2 interface{}
 		)
-		err = res.Scan(&c1, &l1, &s1, &l2)
+		err = res.Scan(&c1, &l1, &s1, &l2, &ts1, &ts2)
 		require.NoError(t, err)
 		require.Equal(t, jsonResults[i][0], fmt.Sprint(c1))
 		require.Equal(t, jsonResults[i][1], fmt.Sprint(l1))
 		require.Equal(t, jsonResults[i][2], fmt.Sprint(s1))
 		require.Equal(t, jsonResults[i][3], fmt.Sprint(l2))
+		require.Equal(t, jsonResults[i][4], fmt.Sprint(ts1))
+		require.Equal(t, jsonResults[i][5], fmt.Sprint(ts2))
 		i++
 	}
 
