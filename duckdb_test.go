@@ -80,7 +80,7 @@ func TestConnector_Close(t *testing.T) {
 }
 
 func ExampleNewConnector() {
-	c, err := NewConnector("duckdb?access_mode=READ_WRITE", func(execer driver.ExecerContext) error {
+	c, err := NewConnector("duck.db?access_mode=READ_WRITE", func(execer driver.ExecerContext) error {
 		initQueries := []string{
 			`SET memory_limit = '10GB';`,
 			`SET threads TO 1;`,
@@ -95,20 +95,29 @@ func ExampleNewConnector() {
 		}
 		return nil
 	})
-	checkErr(err, "failed to create new duckdb connector: %s")
-	defer c.Close()
+	if err != nil {
+		log.Fatalf("failed to create new duckdb connector: %s", err)
+	}
 
 	db := sql.OpenDB(c)
-	defer db.Close()
-
 	var value string
 	row := db.QueryRow(`SELECT value FROM duckdb_settings() WHERE name = 'memory_limit';`)
 	if row.Scan(&value) != nil {
 		log.Fatalf("failed to scan row: %s", err)
 	}
 
-	fmt.Printf("Setting memory_limit is %s", value)
-	// Output: Setting memory_limit is 9.3 GiB
+	if err = c.Close(); err != nil {
+		log.Fatalf("failed to close the connector: %s", err)
+	}
+	if err = db.Close(); err != nil {
+		log.Fatalf("failed to close the database: %s", err)
+	}
+	if err = os.Remove("duck.db"); err != nil {
+		log.Fatalf("failed to remove the database file: %s", err)
+	}
+
+	fmt.Printf("The memory_limit is %s.", value)
+	// Output: The memory_limit is 9.3 GiB.
 }
 
 func TestConnPool(t *testing.T) {
@@ -270,31 +279,32 @@ func TestQuery(t *testing.T) {
 func TestJSON(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
-	var data string
 
-	t.Run("select empty JSON", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("SELECT '{}'::JSON").Scan(&data))
-		require.Equal(t, "{}", string(data))
+	t.Run("SELECT an empty JSON", func(t *testing.T) {
+		var res Composite[map[string]any]
+		require.NoError(t, db.QueryRow(`SELECT '{}'::JSON`).Scan(&res))
+		require.Equal(t, 0, len(res.Get()))
 	})
 
-	t.Run("select from marshalled JSON", func(t *testing.T) {
-		val, _ := json.Marshal(struct {
+	t.Run("SELECT a marshalled JSON", func(t *testing.T) {
+		val, err := json.Marshal(struct {
 			Foo string `json:"foo"`
 		}{
 			Foo: "bar",
 		})
-		require.NoError(t, db.QueryRow(`SELECT ?::JSON->>'foo'`, string(val)).Scan(&data))
-		require.Equal(t, "bar", data)
+		require.NoError(t, err)
+
+		var res string
+		require.NoError(t, db.QueryRow(`SELECT ?::JSON->>'foo'`, string(val)).Scan(&res))
+		require.Equal(t, "bar", res)
 	})
 
-	t.Run("select JSON array", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("SELECT json_array('foo', 'bar')").Scan(&data))
-		require.Equal(t, `["foo","bar"]`, data)
-
-		var items []string
-		require.NoError(t, json.Unmarshal([]byte(data), &items))
-		require.Equal(t, len(items), 2)
-		require.Equal(t, items, []string{"foo", "bar"})
+	t.Run("SELECT a JSON array", func(t *testing.T) {
+		var res Composite[[]any]
+		require.NoError(t, db.QueryRow(`SELECT json_array('foo', 'bar')`).Scan(&res))
+		require.Equal(t, 2, len(res.Get()))
+		require.Equal(t, "foo", res.Get()[0])
+		require.Equal(t, "bar", res.Get()[1])
 	})
 
 	require.NoError(t, db.Close())
@@ -611,7 +621,7 @@ func TestMultipleStatements(t *testing.T) {
 	var family string
 	err = rows.Scan(&family)
 	require.NoError(t, err)
-	require.Equal(t, "\"anatidae\"", family)
+	require.Equal(t, "anatidae", family)
 	require.False(t, rows.Next())
 	err = rows.Close()
 	require.NoError(t, err)
