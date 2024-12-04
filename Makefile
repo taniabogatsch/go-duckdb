@@ -84,13 +84,15 @@ deps.windows.amd64: duckdb
 	cd duckdb && \
 	${DUCKDB_COMMON_BUILD_FLAGS} GENERATOR="-G \"MinGW Makefiles\"" gmake release -j 2
 	cd duckdb/build/release && \
+		rm -rf bundle && \
 		mkdir -p bundle && \
 		cp src/libduckdb_static.a bundle/. && \
 		cp third_party/*/libduckdb_*.a bundle/. && \
 		cp extension/*/lib*_extension.a bundle/.
 	cd duckdb/build/release/bundle && \
-		find . -name '*.a' -exec ${AR} -x {} \;
+		find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
+		find . -name '*.a' -execdir ${AR} -x {} \; && \
 	cd duckdb/build/release/bundle && \
-		${AR} cr ../libduckdb_bundle.a *.obj
+		${AR} cr ../libduckdb_bundle.a ./*/*.o
 
 	cp duckdb/build/release/libduckdb_bundle.a deps/windows_amd64/libduckdb.a
