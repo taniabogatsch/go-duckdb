@@ -92,6 +92,6 @@ deps.windows.amd64: duckdb
 		cd bundle && \
 		find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
 		find . -name '*.a' -execdir ${AR} -x {} \; && \
-		${AR} cr ../libduckdb_bundle.a ./*/*.o
+		${AR} cr ../libduckdb_bundle.a ./*/*.obj
 
 	cp duckdb/build/release/libduckdb_bundle.a deps/windows_amd64/libduckdb.a
