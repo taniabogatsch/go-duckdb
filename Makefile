@@ -36,7 +36,7 @@ deps.darwin.amd64: duckdb
 	mkdir -p deps/darwin_amd64
 
 	cd duckdb && \
-	CFLAGS="-target x86_64-apple-macos11 -O3" CXXFLAGS="-target x86_64-apple-macos11 -O3" ${DUCKDB_COMMON_BUILD_FLAGS} LTO=thin make bundle-library -j 2
+	CFLAGS="-target x86_64-apple-macos11 -O3" CXXFLAGS="-target x86_64-apple-macos11 -O3" ${DUCKDB_COMMON_BUILD_FLAGS} make bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/darwin_amd64/libduckdb.a
 
 .PHONY: deps.darwin.arm64
@@ -45,7 +45,7 @@ deps.darwin.arm64: duckdb
 	mkdir -p deps/darwin_arm64
 
 	cd duckdb && \
-	CFLAGS="-target arm64-apple-macos11 -O3" CXXFLAGS="-target arm64-apple-macos11 -O3" ${DUCKDB_COMMON_BUILD_FLAGS}  LTO=thin make bundle-library -j 2
+	CFLAGS="-target arm64-apple-macos11 -O3" CXXFLAGS="-target arm64-apple-macos11 -O3" ${DUCKDB_COMMON_BUILD_FLAGS}  make bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/darwin_arm64/libduckdb.a
 
 .PHONY: deps.linux.amd64
@@ -54,7 +54,7 @@ deps.linux.amd64: duckdb
 	mkdir -p deps/linux_amd64
 
 	cd duckdb && \
-	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} LTO=thin make bundle-library -j 2
+	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} make bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/linux_amd64/libduckdb.a
 
 .PHONY: deps.linux.arm64
@@ -63,7 +63,7 @@ deps.linux.arm64: duckdb
 	mkdir -p deps/linux_arm64
 
 	cd duckdb && \
-	CC="aarch64-linux-gnu-gcc" CXX="aarch64-linux-gnu-g++" CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} LTO=thin make bundle-library -j 2
+	CC="aarch64-linux-gnu-gcc" CXX="aarch64-linux-gnu-g++" CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} make bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/linux_arm64/libduckdb.a
 
 .PHONY: deps.freebsd.amd64
@@ -72,7 +72,7 @@ deps.freebsd.amd64: duckdb
 	mkdir -p deps/freebsd_amd64
 
 	cd duckdb && \
-	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} LTO=thin gmake bundle-library -j 2
+	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} gmake bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/freebsd_amd64/libduckdb.a
 
 .PHONY: deps.windows.amd64
