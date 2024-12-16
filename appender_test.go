@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -184,6 +185,55 @@ func TestAppendChunks(t *testing.T) {
 	require.Equal(t, rowCount, i)
 	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
+}
+
+func TestAppendToCatalog(t *testing.T) {
+	t.Parallel()
+
+	db, err := sql.Open("duckdb", "")
+	require.NoError(t, err)
+
+	_, err = db.Exec(`ATTACH 'hello_appender.db' AS other`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`
+		CREATE TABLE other.test (
+			col BIGINT
+	  	)`)
+
+	con, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	err = con.Raw(func(anyConn interface{}) error {
+		driverCon := anyConn.(driver.Conn)
+		a, innerErr := NewAppender(driverCon, "other", "", "test")
+		require.NoError(t, innerErr)
+
+		require.NoError(t, a.AppendRow(42))
+		require.NoError(t, a.Flush())
+		require.NoError(t, a.Close())
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Verify results.
+	res, err := db.QueryContext(context.Background(), `SELECT * FROM other.test ORDER BY col`)
+	require.NoError(t, err)
+
+	i := 0
+	for res.Next() {
+		var col int64
+		require.NoError(t, res.Scan(&col))
+		require.Equal(t, int64(42), col)
+		i++
+	}
+
+	require.Equal(t, 1, i)
+	require.NoError(t, res.Close())
+	require.NoError(t, con.Close())
+	require.NoError(t, db.Close())
+
+	require.NoError(t, os.Remove("hello_appender.db"))
 }
 
 func TestAppenderList(t *testing.T) {
