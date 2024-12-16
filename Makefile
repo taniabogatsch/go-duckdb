@@ -72,7 +72,7 @@ deps.freebsd.amd64: duckdb
 	mkdir -p deps/freebsd_amd64
 
 	cd duckdb && \
-	CFLAGS="-Oz" CXXFLAGS="-Oz" ${DUCKDB_COMMON_BUILD_FLAGS} gmake bundle-library -j 2
+	CFLAGS="-Oz" CXXFLAGS="-Oz" ${DUCKDB_COMMON_BUILD_FLAGS} -SMALLER_BINARY=1 gmake bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/freebsd_amd64/libduckdb.a
 
 .PHONY: deps.windows.amd64
