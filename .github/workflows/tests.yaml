@@ -21,8 +21,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-      - name: wget
-        run: wget https://github.com/taniabogatsch/duckdb/releases/download/v42/duckdb-static-lib-windows-mingw.zip
+      - name: curl
+        run: curl -OL https://github.com/taniabogatsch/duckdb/releases/download/v42/duckdb-static-lib-windows-mingw.zip
         shell: bash
       - name: "Run tests"
         run: make test
