@@ -16,7 +16,8 @@ examples:
 
 .PHONY: setup
 setup:
-	rm deps/windows_amd64/libduckdb.a
+	rm -rf deps/windows_amd64
+	mkdir deps/windows_amd64
 	wget https://github.com/taniabogatsch/duckdb/releases/download/v42/duckdb-static-lib-windows-mingw.zip
 	unzip duckdb-static-lib-windows-mingw.zip
 	unzip static-lib-windows-mingw.zip -d mingw-lib
