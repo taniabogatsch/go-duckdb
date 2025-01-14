@@ -22,7 +22,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       - name: wget
-        run: curl https://github.com/taniabogatsch/duckdb/releases/download/v42/duckdb-static-lib-windows-mingw.zip --output duckdb-static-lib-windows-mingw.zip
+        run: wget https://github.com/taniabogatsch/duckdb/releases/download/v42/duckdb-static-lib-windows-mingw.zip
         shell: bash
       - name: "Run tests"
         run: make test
