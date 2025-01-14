@@ -14,8 +14,16 @@ examples:
 	go run examples/table_udf/main.go
 	go run examples/table_udf_parallel/main.go
 
+.PHONY: setup
+setup:
+	rm deps/windows_amd64/libduckdb.a
+	wget https://github.com/taniabogatsch/duckdb/releases/download/v42/duckdb-static-lib-windows-mingw.zip
+	unzip duckdb-static-lib-windows-mingw.zip
+	unzip static-lib-windows-mingw.zip -d mingw-lib
+	cp mingw-lib/libduckdb_bundle.a deps/windows_amd64/libduckdb.a
+
 .PHONY: test
-test:
+test: setup
 	go test -v -race -count=1 .
 
 .PHONY: deps.header
