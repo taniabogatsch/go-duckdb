@@ -18,9 +18,8 @@ examples:
 setup:
 	rm -rf deps/windows_amd64
 	mkdir deps/windows_amd64
-	unzip duckdb-static-lib-windows-mingw.zip
-	unzip static-lib-windows-mingw.zip -d mingw-lib
-	cp mingw-lib/libduckdb_bundle.a deps/windows_amd64/libduckdb.a
+	unzip lib.zip
+	cp libduckdb_bundle_push.a deps/windows_amd64/libduckdb.a
 
 .PHONY: test
 test: setup
