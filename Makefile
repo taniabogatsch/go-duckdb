@@ -18,9 +18,7 @@ examples:
 setup:
 	rm -rf deps/windows_amd64
 	mkdir deps/windows_amd64
-	ls
-	cd bundled
-	ls
+	rm duckdb.h
 	unzip duckdb-static-lib-windows-mingw.zip
 	unzip static-lib-windows-mingw.zip
 	cp libduckdb_bundle.a ../deps/windows_amd64/libduckdb.a
