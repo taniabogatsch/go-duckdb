@@ -26,6 +26,9 @@ jobs:
           mkdir bundled
           cd bundled
           curl -OL https://github.com/taniabogatsch/duckdb/releases/download/v42.2/duckdb-static-lib-windows-mingw.zip
+          ls
+          cd ..
+          ls
         shell: bash
       - name: "Run tests"
         run: make test
