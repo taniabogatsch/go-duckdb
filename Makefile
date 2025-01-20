@@ -17,6 +17,7 @@ examples:
 .PHONY: test
 test:
 	go build -trimpath -a -tags="netgo osusergo" -ldflags='-w -extldflags "-static"'
+	go test -v -race -count=1 .
 
 .PHONY: deps.header
 deps.header:
