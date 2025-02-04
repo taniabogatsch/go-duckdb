@@ -14,9 +14,23 @@ examples:
 	go run examples/table_udf/main.go
 	go run examples/table_udf_parallel/main.go
 
+.PHONY: setup
+setup:
+	rm -rf deps/linux_amd64
+	rm -rf deps/linux_arm64
+	mkdir deps/linux_amd64
+	mkdir deps/linux_arm64
+	unzip duckdb-static-lib-linux-aarch64.zip
+	unzip static-lib-linux-aarch64.zip
+	mv libduckdb_bundle.a libduckdb.a
+	cp libduckdb.a deps/linux_arm64/libduckdb.a
+	unzip duckdb-static-lib-linux-amd64.zip
+	rm duckdb.h
+	unzip static-lib-linux-amd64.zip
+	cp libduckdb_bundle.a deps/linux_amd64/libduckdb.a
+
 .PHONY: test
-test:
-	go build -trimpath -a -tags="netgo osusergo" -ldflags='-w -extldflags "-static"'
+test: setup
 	go test -v -race -count=1 .
 
 .PHONY: deps.header
