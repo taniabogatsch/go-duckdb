@@ -16,6 +16,7 @@ examples:
 
 .PHONY: setup
 setup:
+	rm duckdb.h
 	rm -rf deps/linux_amd64
 	rm -rf deps/linux_arm64
 	mkdir deps/linux_amd64
