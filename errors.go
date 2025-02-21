@@ -9,13 +9,9 @@ import (
 
 func getError(errDriver error, err error) error {
 	if err == nil {
-		return fmt.Errorf("%s: %w", driverErrMsg, errDriver)
+		return errors.Join(errDriverSQL, errDriver)
 	}
-	return fmt.Errorf("%s: %w: %s", driverErrMsg, errDriver, err.Error())
-}
-
-func duckdbError(err *C.char) error {
-	return fmt.Errorf("%s: %w", duckdbErrMsg, errors.New(C.GoString(err)))
+	return errors.Join(errDriverSQL, errDriver, err)
 }
 
 func castError(actual string, expected string) error {
@@ -48,9 +44,9 @@ func unsupportedTypeError(name string) error {
 
 func invalidatedAppenderError(err error) error {
 	if err == nil {
-		return errors.New(invalidatedAppenderMsg)
+		return errInvalidatedAppend
 	}
-	return fmt.Errorf("%w: %s", err, invalidatedAppenderMsg)
+	return errors.Join(err, errInvalidatedAppend)
 }
 
 func tryOtherFuncError(hint string) error {
@@ -58,7 +54,8 @@ func tryOtherFuncError(hint string) error {
 }
 
 func addIndexToError(err error, idx int) error {
-	return fmt.Errorf("%w: %s: %d", err, indexErrMsg, idx)
+	errIdx := fmt.Errorf("index %d", idx)
+	return errors.Join(err, errIdx)
 }
 
 func interfaceIsNilError(interfaceName string) error {
@@ -70,24 +67,21 @@ func duplicateNameError(name string) error {
 }
 
 const (
-	driverErrMsg           = "database/sql/driver"
-	duckdbErrMsg           = "duckdb error"
-	castErrMsg             = "cast error"
-	convertErrMsg          = "conversion error"
-	invalidInputErrMsg     = "invalid input"
-	structFieldErrMsg      = "invalid STRUCT field"
-	columnCountErrMsg      = "invalid column count"
-	unsupportedTypeErrMsg  = "unsupported data type"
-	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
-	tryOtherFuncErrMsg     = "please try this function instead"
-	indexErrMsg            = "index"
-	unknownTypeErrMsg      = "unknown type"
-	interfaceIsNilErrMsg   = "interface is nil"
-	duplicateNameErrMsg    = "duplicate name"
-	paramIndexErrMsg       = "invalid parameter index"
+	castErrMsg            = "cast error"
+	convertErrMsg         = "conversion error"
+	invalidInputErrMsg    = "invalid input"
+	structFieldErrMsg     = "invalid STRUCT field"
+	columnCountErrMsg     = "invalid column count"
+	unsupportedTypeErrMsg = "unsupported data type"
+	tryOtherFuncErrMsg    = "please try this function instead"
+	unknownTypeErrMsg     = "unknown type"
+	interfaceIsNilErrMsg  = "interface is nil"
+	duplicateNameErrMsg   = "duplicate name"
+	paramIndexErrMsg      = "invalid parameter index"
 )
 
 var (
+	errDriverSQL  = errors.New("database/sql/driver")
 	errInternal   = errors.New("internal error: please file a bug report at go-duckdb")
 	errAPI        = errors.New("API error")
 	errVectorSize = errors.New("data chunks cannot exceed duckdb's internal vector size")
@@ -120,6 +114,7 @@ var (
 	errAppenderAppendRow        = errors.New("could not append row")
 	errAppenderAppendAfterClose = fmt.Errorf("%w: appender already closed", errAppenderAppendRow)
 	errAppenderFlush            = errors.New("could not flush appender")
+	errInvalidatedAppend        = errors.New("appended data has been invalidated due to corrupt row")
 
 	errTableDescCreation = errors.New("could not create table description")
 

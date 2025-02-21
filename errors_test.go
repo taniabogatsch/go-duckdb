@@ -16,7 +16,7 @@ func testErrorInternal(t *testing.T, actual error, contains []string) {
 		require.Contains(t, actual.Error(), msg)
 	}
 
-	levels := strings.Count(actual.Error(), driverErrMsg)
+	levels := strings.Count(actual.Error(), errDriverSQL.Error())
 	require.Equal(t, 1, levels)
 }
 
@@ -134,6 +134,7 @@ func TestErrAppender(t *testing.T) {
 		testError(t, err, errAppenderCreation.Error(), unsupportedTypeErrMsg)
 	})
 
+	// TODO: this should stay the old behavior
 	t.Run(columnCountErrMsg, func(t *testing.T) {
 		c, db, conn, a := prepareAppender(t, `CREATE TABLE test (a VARCHAR, b VARCHAR)`)
 		defer cleanupAppender(t, c, db, conn, a)

@@ -21,6 +21,8 @@ type Appender struct {
 	names []string
 	// The number of appended rows.
 	rowCount int
+	// The active columns of the appender.
+	activeColumns []bool
 }
 
 // NewAppenderFromConn returns a new Appender for the default catalog from a DuckDB driver connection.
@@ -63,7 +65,7 @@ func NewAppender(driverConn driver.Conn, catalog string, schema string, table st
 		return nil, getError(errTableDescCreation, err)
 	}
 
-	// Get the column names and types.
+	// Get the column names and types, and initialize the active columns.
 	columnCount := apiAppenderColumnCount(appender)
 	for i := uint64(0); i < columnCount; i++ {
 		colType := apiAppenderColumnType(appender, i)
@@ -71,6 +73,8 @@ func NewAppender(driverConn driver.Conn, catalog string, schema string, table st
 
 		colName := apiTableDescriptionGetColumnName(tableDesc, i)
 		a.names = append(a.names, colName)
+
+		a.activeColumns = append(a.activeColumns, true)
 
 		// Ensure that we only create an appender for supported column types.
 		t := Type(apiGetTypeId(colType))
@@ -136,28 +140,86 @@ func (a *Appender) Close() error {
 
 // AppendRow appends a row of values to the appender.
 // The values are provided as separate arguments.
+// If there are fewer values than columns, then the trailing columns default to their default values or NULL.
+// Note that this can trigger a Flush, if the number of values changes between calls to AppendRow[...].
 func (a *Appender) AppendRow(args ...driver.Value) error {
 	if a.closed {
 		return getError(errAppenderAppendAfterClose, nil)
 	}
 
-	err := a.appendRowSlice(args)
-	if err != nil {
+	// TODO: Make opt-in with boolean or so. or better, move to safe version or so
+	if a.mustChangeActiveColumnsSlice(args) {
+		if err := a.changeActiveColumns(); err != nil {
+			return getError(errAppenderAppendRow, err)
+		}
+	}
+
+	if err := a.newDataChunk(); err != nil {
 		return getError(errAppenderAppendRow, err)
+	}
+
+	// Set all values.
+	for i, val := range args {
+		chunk := &a.chunks[len(a.chunks)-1]
+		err := chunk.SetValue(i, a.rowCount, val)
+		if err != nil {
+			return getError(errAppenderAppendRow, err)
+		}
+	}
+	a.rowCount++
+	return nil
+}
+
+func (a *Appender) mustChangeActiveColumnsMap(m map[string]driver.Value) bool {
+	// Change the active columns.
+	activeColumnsChange := false
+	for i, name := range a.names {
+		_, ok := m[name]
+		if ok && !a.activeColumns[i] {
+			activeColumnsChange = true
+			a.activeColumns[i] = true
+		}
+		if !ok && a.activeColumns[i] {
+			activeColumnsChange = true
+			a.activeColumns[i] = false
+		}
+	}
+	return activeColumnsChange
+}
+
+func (a *Appender) changeActiveColumns() error {
+	if err := a.Flush(); err != nil {
+		return err
+	}
+	state := apiAppenderClearColumns(a.appender)
+	if apiState(state) == apiStateError {
+		return getDuckDBError(apiAppenderError(a.appender))
+	}
+	for i, active := range a.activeColumns {
+		if active {
+			state = apiAppenderAddColumn(a.appender, a.names[i])
+			if apiState(state) == apiStateError {
+				return getDuckDBError(apiAppenderError(a.appender))
+			}
+		}
 	}
 	return nil
 }
 
 // AppendRowMap appends a row of values to the appender.
 // The values are provided as a column name to argument mapping.
+// If there are fewer values than columns, then the missing columns default to their default values or NULL.
+// Note that this can trigger a Flush, if the number of values changes between calls to AppendRow[...].
 func (a *Appender) AppendRowMap(m map[string]driver.Value) error {
 	if a.closed {
 		return getError(errAppenderAppendAfterClose, nil)
 	}
 
-	if len(m) != len(a.names) {
-		// TODO: ensure that each name maps to a column, remember default columns
-		panic("TODO: implement default values")
+	// TODO: Make opt-in with boolean or so.
+	if a.mustChangeActiveColumnsMap(m) {
+		if err := a.changeActiveColumns(); err != nil {
+			return getError(errAppenderAppendRow, err)
+		}
 	}
 
 	if err := a.newDataChunk(); err != nil {
@@ -165,11 +227,13 @@ func (a *Appender) AppendRowMap(m map[string]driver.Value) error {
 	}
 
 	// Set all values.
-	for i, name := range a.names {
-		chunk := &a.chunks[len(a.chunks)-1]
-		err := chunk.SetValue(i, a.rowCount, m[name])
-		if err != nil {
-			return err
+	for i, active := range a.activeColumns {
+		if active {
+			chunk := &a.chunks[len(a.chunks)-1]
+			err := chunk.SetValue(i, a.rowCount, m[a.names[i]])
+			if err != nil {
+				return err
+			}
 		}
 	}
 	a.rowCount++
@@ -192,26 +256,21 @@ func (a *Appender) newDataChunk() error {
 	return nil
 }
 
-func (a *Appender) appendRowSlice(args []driver.Value) error {
-	// Early-out, if the number of args does not match the column count.
-	if len(args) != len(a.types) {
-		return columnCountError(len(args), len(a.types))
-	}
-
-	if err := a.newDataChunk(); err != nil {
-		return err
-	}
-
-	// Set all values.
-	for i, val := range args {
-		chunk := &a.chunks[len(a.chunks)-1]
-		err := chunk.SetValue(i, a.rowCount, val)
-		if err != nil {
-			return err
+func (a *Appender) mustChangeActiveColumnsSlice(args []driver.Value) bool {
+	activeColumnsChange := false
+	for i := 0; i < len(args); i++ {
+		if !a.activeColumns[i] {
+			activeColumnsChange = true
+			a.activeColumns[i] = true
 		}
 	}
-	a.rowCount++
-	return nil
+	for i := len(args); i < len(a.activeColumns); i++ {
+		if a.activeColumns[i] {
+			activeColumnsChange = true
+			a.activeColumns[i] = false
+		}
+	}
+	return activeColumnsChange
 }
 
 func (a *Appender) appendDataChunks() error {
