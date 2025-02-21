@@ -150,6 +150,7 @@ type (
 	apiExtractedStatements = bindings.ExtractedStatements
 	apiPendingResult       = bindings.PendingResult
 	apiAppender            = bindings.Appender
+	apiTableDescription    = bindings.TableDescription
 	apiConfig              = bindings.Config
 	apiLogicalType         = bindings.LogicalType
 	apiDataChunk           = bindings.DataChunk
@@ -347,6 +348,11 @@ var (
 	apiAppenderFlush                           = bindings.AppenderFlush
 	apiAppenderDestroy                         = bindings.AppenderDestroy
 	apiAppendDataChunk                         = bindings.AppendDataChunk
+	apiTableDescriptionCreateExt               = bindings.TableDescriptionCreateExt
+	apiTableDescriptionDestroy                 = bindings.TableDescriptionDestroy
+	apiTableDescriptionError                   = bindings.TableDescriptionError
+	apiColumnHasDefault                        = bindings.ColumnHasDefault
+	apiTableDescriptionGetColumnName           = bindings.TableDescriptionGetColumnName
 	apiResultGetChunk                          = bindings.ResultGetChunk
 	apiResultChunkCount                        = bindings.ResultChunkCount
 	apiValueInt64                              = bindings.ValueInt64

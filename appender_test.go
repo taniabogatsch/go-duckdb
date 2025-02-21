@@ -337,7 +337,7 @@ func TestAppenderNullList(t *testing.T) {
 	for res.Next() {
 		var strS string
 		var intS []any
-		err := res.Scan(&intS)
+		err = res.Scan(&intS)
 		if err != nil {
 			strS = "<nil>"
 		} else {
@@ -370,7 +370,7 @@ func TestAppenderNullStruct(t *testing.T) {
 	i := 0
 	for res.Next() {
 		var row any
-		err := res.Scan(&row)
+		err = res.Scan(&row)
 		switch i {
 		case 0:
 			require.NoError(t, err)
@@ -456,10 +456,7 @@ func TestAppenderNullIntAndString(t *testing.T) {
 	for res.Next() {
 		var id int
 		var str string
-		err := res.Scan(
-			&id,
-			&str,
-		)
+		err = res.Scan(&id, &str)
 		if i == 0 {
 			require.NoError(t, err)
 			require.Equal(t, 32, id)
@@ -874,6 +871,52 @@ func TestAppendToCatalog(t *testing.T) {
 	}
 	require.Equal(t, 1, i)
 	require.NoError(t, os.Remove("hello_appender.db"))
+}
+
+func TestAppendRowSlice(t *testing.T) {
+	defer VerifyAllocationCounters()
+
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (i INT, j INT)`)
+	defer cleanupAppender(t, c, db, conn, a)
+
+	var rowSlice []driver.Value
+	rowSlice = append(rowSlice, int32(1))
+	rowSlice = append(rowSlice, int32(2))
+
+	require.NoError(t, a.AppendRow(rowSlice...))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	res := db.QueryRowContext(context.Background(), `SELECT i, j FROM test`)
+
+	var i, j int32
+	require.NoError(t, res.Scan(&i, &j))
+	require.Equal(t, int32(1), i)
+	require.Equal(t, int32(2), j)
+}
+
+func TestAppendRowMap(t *testing.T) {
+	defer VerifyAllocationCounters()
+
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (i INT, j INT, k INT)`)
+	defer cleanupAppender(t, c, db, conn, a)
+
+	rowMap := make(map[string]driver.Value)
+	rowMap["j"] = int32(2)
+	rowMap["k"] = nil
+	rowMap["i"] = int32(1)
+
+	require.NoError(t, a.AppendRowMap(rowMap))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	res := db.QueryRowContext(context.Background(), `SELECT i, j, k FROM test`)
+
+	var i, j, k any
+	require.NoError(t, res.Scan(&i, &j, &k))
+	require.Equal(t, int32(1), i)
+	require.Equal(t, int32(2), j)
+	require.Nil(t, k)
 }
 
 func BenchmarkAppenderNested(b *testing.B) {

@@ -121,6 +121,8 @@ var (
 	errAppenderAppendAfterClose = fmt.Errorf("%w: appender already closed", errAppenderAppendRow)
 	errAppenderFlush            = errors.New("could not flush appender")
 
+	errTableDescCreation = errors.New("could not create table description")
+
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
 	errEmptyName             = errors.New("empty name")
 	errInvalidDecimalWidth   = fmt.Errorf("the DECIMAL with must be between 1 and %d", max_decimal_width)

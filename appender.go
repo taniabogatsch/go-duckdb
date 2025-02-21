@@ -17,6 +17,8 @@ type Appender struct {
 	chunks []DataChunk
 	// The column types of the table to append to.
 	types []apiLogicalType
+	// The column names of the table to append to.
+	names []string
 	// The number of appended rows.
 	rowCount int
 }
@@ -52,11 +54,23 @@ func NewAppender(driverConn driver.Conn, catalog string, schema string, table st
 		rowCount: 0,
 	}
 
-	// Get the column types.
+	var tableDesc apiTableDescription
+	state = apiTableDescriptionCreateExt(conn.conn, catalog, schema, table, &tableDesc)
+	defer apiTableDescriptionDestroy(&tableDesc)
+	if apiState(state) == apiStateError {
+		apiAppenderDestroy(&appender)
+		err := getDuckDBError(apiTableDescriptionError(tableDesc))
+		return nil, getError(errTableDescCreation, err)
+	}
+
+	// Get the column names and types.
 	columnCount := apiAppenderColumnCount(appender)
 	for i := uint64(0); i < columnCount; i++ {
 		colType := apiAppenderColumnType(appender, i)
 		a.types = append(a.types, colType)
+
+		colName := apiTableDescriptionGetColumnName(tableDesc, i)
+		a.names = append(a.names, colName)
 
 		// Ensure that we only create an appender for supported column types.
 		t := Type(apiGetTypeId(colType))
@@ -120,7 +134,8 @@ func (a *Appender) Close() error {
 	return nil
 }
 
-// AppendRow loads a row of values into the appender. The values are provided as separate arguments.
+// AppendRow appends a row of values to the appender.
+// The values are provided as separate arguments.
 func (a *Appender) AppendRow(args ...driver.Value) error {
 	if a.closed {
 		return getError(errAppenderAppendAfterClose, nil)
@@ -133,12 +148,47 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	return nil
 }
 
-func (a *Appender) addDataChunk() error {
+// AppendRowMap appends a row of values to the appender.
+// The values are provided as a column name to argument mapping.
+func (a *Appender) AppendRowMap(m map[string]driver.Value) error {
+	if a.closed {
+		return getError(errAppenderAppendAfterClose, nil)
+	}
+
+	if len(m) != len(a.names) {
+		// TODO: ensure that each name maps to a column, remember default columns
+		panic("TODO: implement default values")
+	}
+
+	if err := a.newDataChunk(); err != nil {
+		return err
+	}
+
+	// Set all values.
+	for i, name := range a.names {
+		chunk := &a.chunks[len(a.chunks)-1]
+		err := chunk.SetValue(i, a.rowCount, m[name])
+		if err != nil {
+			return err
+		}
+	}
+	a.rowCount++
+	return nil
+}
+
+func (a *Appender) newDataChunk() error {
+	if a.rowCount != GetDataChunkCapacity() && len(a.chunks) != 0 {
+		return nil
+	}
+	// Create a new data chunk if
+	// - the current chunk is full, or
+	// - this chunk is the initial chunk.
 	var chunk DataChunk
 	if err := chunk.initFromTypes(a.types, true); err != nil {
 		return err
 	}
 	a.chunks = append(a.chunks, chunk)
+	a.rowCount = 0
 	return nil
 }
 
@@ -148,12 +198,8 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 		return columnCountError(len(args), len(a.types))
 	}
 
-	// Create a new data chunk if the current chunk is full.
-	if a.rowCount == GetDataChunkCapacity() || len(a.chunks) == 0 {
-		if err := a.addDataChunk(); err != nil {
-			return err
-		}
-		a.rowCount = 0
+	if err := a.newDataChunk(); err != nil {
+		return err
 	}
 
 	// Set all values.
@@ -164,7 +210,6 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 			return err
 		}
 	}
-
 	a.rowCount++
 	return nil
 }
