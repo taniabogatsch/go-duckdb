@@ -795,13 +795,11 @@ func TestAppenderWithJSON(t *testing.T) {
 	  	)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
-	for _, jsonInput := range jsonInputs {
-		var jsonData map[string]interface{}
-		err := json.Unmarshal(jsonInput, &jsonData)
-		require.NoError(t, err)
-		require.NoError(t, a.AppendRow(jsonData["c1"], jsonData["l1"], jsonData["s1"], jsonData["l2"]))
+	for _, data := range jsonInputs {
+		var v map[string]driver.Value
+		require.NoError(t, json.Unmarshal(data, &v))
+		require.NoError(t, a.AppendRowMap(v))
 	}
-
 	require.NoError(t, a.Flush())
 
 	// Verify results.
@@ -817,8 +815,7 @@ func TestAppenderWithJSON(t *testing.T) {
 			s1 interface{}
 			l2 interface{}
 		)
-		err := res.Scan(&c1, &l1, &s1, &l2)
-		require.NoError(t, err)
+		require.NoError(t, res.Scan(&c1, &l1, &s1, &l2))
 		require.Equal(t, jsonResults[i][0], fmt.Sprint(c1))
 		require.Equal(t, jsonResults[i][1], fmt.Sprint(l1))
 		require.Equal(t, jsonResults[i][2], fmt.Sprint(s1))
