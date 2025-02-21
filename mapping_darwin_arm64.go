@@ -340,6 +340,7 @@ var (
 	apiProfilingInfoGetChildCount              = bindings.ProfilingInfoGetChildCount
 	apiProfilingInfoGetChild                   = bindings.ProfilingInfoGetChild
 	apiAppenderCreate                          = bindings.AppenderCreate
+	apiAppenderCreateExt                       = bindings.AppenderCreateExt
 	apiAppenderColumnCount                     = bindings.AppenderColumnCount
 	apiAppenderColumnType                      = bindings.AppenderColumnType
 	apiAppenderError                           = bindings.AppenderError
