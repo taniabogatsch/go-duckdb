@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	_ "github.com/marcboeker/go-duckdb"
+	_ "github.com/taniabogatsch/go-duckdb"
 )
 
 var db *sql.DB
