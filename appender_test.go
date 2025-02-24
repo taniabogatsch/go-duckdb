@@ -775,10 +775,8 @@ func TestAppendToCatalog(t *testing.T) {
 	_, err := db.Exec(`ATTACH 'hello_appender.db' AS other`)
 	require.NoError(t, err)
 
-	_, err = db.Exec(`
-		CREATE TABLE other.test (
-			col BIGINT
-	  	)`)
+	_, err = db.Exec(`CREATE TABLE other.test (col BIGINT)`)
+	require.NoError(t, err)
 
 	conn := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn)
