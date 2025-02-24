@@ -769,6 +769,10 @@ func TestAppenderDecimal(t *testing.T) {
 func TestAppendToCatalog(t *testing.T) {
 	defer VerifyAllocationCounters()
 
+	defer func() {
+		require.NoError(t, os.Remove("hello_appender.db"))
+	}()
+
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -806,7 +810,6 @@ func TestAppendToCatalog(t *testing.T) {
 		i++
 	}
 	require.Equal(t, 1, i)
-	require.NoError(t, os.Remove("hello_appender.db"))
 }
 
 var jsonInputs = [][]byte{
