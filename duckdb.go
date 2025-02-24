@@ -4,11 +4,6 @@
 // Package duckdb implements a database/sql driver for the DuckDB database.
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"context"
 	"database/sql"
@@ -16,7 +11,6 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"unsafe"
 )
 
 func init() {
@@ -43,7 +37,12 @@ func (Driver) OpenConnector(dsn string) (driver.Connector, error) {
 // The user must close the Connector, if it is not passed to the sql.OpenDB function.
 // Otherwise, sql.DB closes the Connector when calling sql.DB.Close().
 func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (*Connector, error) {
-	var db C.duckdb_database
+	var db apiDatabase
+
+	const inMemoryName = ":memory:"
+	if dsn == inMemoryName || strings.HasPrefix(dsn, inMemoryName+"?") {
+		dsn = dsn[len(inMemoryName):]
+	}
 
 	parsedDSN, err := url.Parse(dsn)
 	if err != nil {
@@ -54,16 +53,15 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	if err != nil {
 		return nil, err
 	}
-	defer C.duckdb_destroy_config(&config)
+	defer apiDestroyConfig(&config)
 
-	connStr := C.CString(getConnString(dsn))
-	defer C.duckdb_free(unsafe.Pointer(connStr))
+	connStr := getConnString(dsn)
+	var errMsg string
 
-	var outError *C.char
-	defer C.duckdb_free(unsafe.Pointer(outError))
-
-	if state := C.duckdb_open_ext(connStr, &db, config, &outError); state == C.DuckDBError {
-		return nil, getError(errConnect, duckdbError(outError))
+	state := apiOpenExt(connStr, &db, config, &errMsg)
+	if apiState(state) == apiStateError {
+		apiClose(&db)
+		return nil, getError(errConnect, getDuckDBError(errMsg))
 	}
 
 	return &Connector{
@@ -73,7 +71,8 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 }
 
 type Connector struct {
-	db         C.duckdb_database
+	closed     bool
+	db         apiDatabase
 	connInitFn func(execer driver.ExecerContext) error
 }
 
@@ -82,25 +81,27 @@ func (*Connector) Driver() driver.Driver {
 }
 
 func (c *Connector) Connect(context.Context) (driver.Conn, error) {
-	var duckdbCon C.duckdb_connection
-	if state := C.duckdb_connect(c.db, &duckdbCon); state == C.DuckDBError {
+	var newConn apiConnection
+	state := apiConnect(c.db, &newConn)
+	if apiState(state) == apiStateError {
 		return nil, getError(errConnect, nil)
 	}
 
-	con := &Conn{duckdbCon: duckdbCon}
-
+	conn := &Conn{conn: newConn}
 	if c.connInitFn != nil {
-		if err := c.connInitFn(con); err != nil {
+		if err := c.connInitFn(conn); err != nil {
 			return nil, err
 		}
 	}
-
-	return con, nil
+	return conn, nil
 }
 
 func (c *Connector) Close() error {
-	C.duckdb_close(&c.db)
-	c.db = nil
+	if c.closed {
+		return nil
+	}
+	apiClose(&c.db)
+	c.closed = true
 	return nil
 }
 
@@ -112,15 +113,17 @@ func getConnString(dsn string) string {
 	return dsn[0:idx]
 }
 
-func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
-	var config C.duckdb_config
-	if state := C.duckdb_create_config(&config); state == C.DuckDBError {
-		C.duckdb_destroy_config(&config)
-		return nil, getError(errCreateConfig, nil)
+func prepareConfig(parsedDSN *url.URL) (apiConfig, error) {
+	var config apiConfig
+
+	state := apiCreateConfig(&config)
+	if apiState(state) == apiStateError {
+		apiDestroyConfig(&config)
+		return config, getError(errCreateConfig, nil)
 	}
 
 	if err := setConfigOption(config, "duckdb_api", "go"); err != nil {
-		return nil, err
+		return config, err
 	}
 
 	// Early-out, if the DSN does not contain configuration options.
@@ -133,25 +136,18 @@ func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 			continue
 		}
 		if err := setConfigOption(config, k, v[0]); err != nil {
-			return nil, err
+			return config, err
 		}
 	}
 
 	return config, nil
 }
 
-func setConfigOption(config C.duckdb_config, name string, option string) error {
-	cName := C.CString(name)
-	defer C.duckdb_free(unsafe.Pointer(cName))
-
-	cOption := C.CString(option)
-	defer C.duckdb_free(unsafe.Pointer(cOption))
-
-	state := C.duckdb_set_config(config, cName, cOption)
-	if state == C.DuckDBError {
-		C.duckdb_destroy_config(&config)
+func setConfigOption(config apiConfig, name string, option string) error {
+	state := apiSetConfig(config, name, option)
+	if apiState(state) == apiStateError {
+		apiDestroyConfig(&config)
 		return getError(errSetConfig, fmt.Errorf("%s=%s", name, option))
 	}
-
 	return nil
 }

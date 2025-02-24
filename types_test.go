@@ -200,7 +200,7 @@ func testTypesReset[T require.TestingT](t T, c *Connector) {
 	require.NoError(t, err)
 }
 
-func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows []testTypesRow) []testTypesRow {
+func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []testTypesRow) []testTypesRow {
 	// Append the rows. We cannot append Composite types.
 	for i := 0; i < len(expectedRows); i++ {
 		r := &expectedRows[i]
@@ -242,8 +242,9 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 	}
 	require.NoError(t, a.Flush())
 
-	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM test ORDER BY Smallint_col`)
+	res, err := db.QueryContext(context.Background(), `SELECT * FROM test ORDER BY Smallint_col`)
 	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
 
 	// Scan the rows.
 	var actualRows []testTypesRow
@@ -293,18 +294,18 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 }
 
 func TestTypes(t *testing.T) {
-	t.Parallel()
+	defer VerifyAllocationCounters()
+
 	expectedRows := testTypesGenerateRows(t, 3)
-	c, con, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
-	actualRows := testTypes(t, c, a, expectedRows)
+	c, db, conn, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
+	defer cleanupAppender(t, c, db, conn, a)
+	actualRows := testTypes(t, db, a, expectedRows)
 
 	for i := range actualRows {
 		expectedRows[i].toUTC()
 		require.Equal(t, expectedRows[i], actualRows[i])
 	}
-
 	require.Equal(t, len(expectedRows), len(actualRows))
-	cleanupAppender(t, c, con, a)
 }
 
 // NOTE: go-duckdb only contains very few benchmarks. The purpose of those benchmarks is to avoid regressions
@@ -313,19 +314,19 @@ var benchmarkTypesResult []testTypesRow
 
 func BenchmarkTypes(b *testing.B) {
 	expectedRows := testTypesGenerateRows(b, GetDataChunkCapacity()*3+10)
-	c, con, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
+	c, db, conn, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
+	defer cleanupAppender(b, c, db, conn, a)
 
 	var r []testTypesRow
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		r = testTypes(b, c, a, expectedRows)
+		r = testTypes(b, db, a, expectedRows)
 		testTypesReset(b, c)
 	}
 	b.StopTimer()
 
 	// Ensure that the compiler does not eliminate the line by storing the result.
 	benchmarkTypesResult = r
-	cleanupAppender(b, c, con, a)
 }
 
 func compareDecimal(t *testing.T, want Decimal, got Decimal) {
@@ -335,8 +336,10 @@ func compareDecimal(t *testing.T, want Decimal, got Decimal) {
 }
 
 func TestDecimal(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	t.Run("SELECT all possible DECIMAL widths", func(t *testing.T) {
 		for i := 1; i <= 38; i++ {
@@ -361,12 +364,12 @@ func TestDecimal(t *testing.T) {
 		) v
 		ORDER BY v ASC`)
 		require.NoError(t, err)
-		require.NoError(t, res.Close())
+		defer closeRowsWrapper(t, res)
 
 		bigNumber, success := new(big.Int).SetString("1234567890123456789234", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		bigNegativeNumber, success := new(big.Int).SetString("-1234567890123456789234", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		tests := []struct {
 			input string
 			want  Decimal
@@ -381,7 +384,7 @@ func TestDecimal(t *testing.T) {
 			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNegativeNumber, Width: 22, Scale: 3}},
 		}
 		for _, test := range tests {
-			r := db.QueryRow(fmt.Sprintf("SELECT %s", test.input))
+			r := db.QueryRow(fmt.Sprintf(`SELECT %s`, test.input))
 			var fs Decimal
 			require.NoError(t, r.Scan(&fs))
 			compareDecimal(t, test.want, fs)
@@ -390,7 +393,7 @@ func TestDecimal(t *testing.T) {
 
 	t.Run("SELECT a huge DECIMAL ", func(t *testing.T) {
 		bigInt, success := new(big.Int).SetString("12345678901234567890123456789", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		var f Decimal
 		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
 		compareDecimal(t, Decimal{Value: bigInt, Width: 29, Scale: 20}, f)
@@ -443,12 +446,10 @@ func TestDecimal(t *testing.T) {
 			require.Equal(t, test.want, fs.String())
 		}
 	})
-
-	require.NoError(t, db.Close())
 }
 
 func TestDecimalString(t *testing.T) {
-	t.Parallel()
+	defer VerifyAllocationCounters()
 
 	testCases := []struct {
 		input    Decimal
@@ -593,34 +594,38 @@ func TestDecimalString(t *testing.T) {
 }
 
 func TestBlob(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	// Scan a hexadecimal value.
 	var b []byte
 	require.NoError(t, db.QueryRow("SELECT '\\xAA'::BLOB").Scan(&b))
 	require.Equal(t, []byte{0xAA}, b)
-	require.NoError(t, db.Close())
 }
 
 func TestList(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	// Test a LIST exceeding duckdb's standard vector size.
 	const n = 4000
 	var row Composite[[]int]
 	require.NoError(t, db.QueryRow("SELECT range(0, ?, 1)", n).Scan(&row))
-	require.Equal(t, n, len(row.Get()))
+	require.Len(t, row.Get(), n)
 	for i := 0; i < n; i++ {
 		require.Equal(t, i, row.Get()[i])
 	}
-	require.NoError(t, db.Close())
 }
 
 func TestUUID(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	_, err := db.Exec(`CREATE TABLE uuid_test(uuid UUID)`)
 	require.NoError(t, err)
@@ -654,13 +659,13 @@ func TestUUID(t *testing.T) {
 		require.NoError(t, db.QueryRow(`SELECT ?::uuid`, test).Scan(&u))
 		require.Equal(t, test.String(), u.String())
 	}
-
-	require.NoError(t, db.Close())
 }
 
 func TestUUIDScanError(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	var u UUID
 	// invalid value type
@@ -672,8 +677,10 @@ func TestUUIDScanError(t *testing.T) {
 }
 
 func TestDate(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	tests := map[string]struct {
 		want  time.Time
@@ -690,12 +697,43 @@ func TestDate(t *testing.T) {
 		require.Equal(t, test.want, res)
 	}
 
-	require.NoError(t, db.Close())
+	ts, err := time.Parse(time.DateTime, time.DateTime)
+	require.NoError(t, err)
+
+	var res time.Time
+	err = db.QueryRow(`SELECT ?::DATE`, ts).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, time.Date(2006, time.January, 0o2, 0, 0, 0, 0, time.UTC), res)
+}
+
+func TestTime(t *testing.T) {
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	IST, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+
+	timeUTC := time.Date(1, time.January, 1, 11, 42, 7, 0, time.UTC)
+
+	var res time.Time
+	err = db.QueryRow(`SELECT ?::TIME`, timeUTC).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, timeUTC, res)
+
+	timeTZ := time.Date(1, time.January, 1, 11, 42, 7, 0, IST)
+
+	err = db.QueryRow(`SELECT ?::TIMETZ`, timeTZ).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, timeTZ.UTC(), res)
 }
 
 func TestENUMs(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	type environment string
 	const (
@@ -728,13 +766,13 @@ func TestENUMs(t *testing.T) {
 	var row Composite[[]environment]
 	require.NoError(t, db.QueryRow("SELECT environments FROM all_enums").Scan(&row))
 	require.ElementsMatch(t, []environment{Air, Sea, Land}, row.Get())
-
-	require.NoError(t, db.Close())
 }
 
 func TestHugeInt(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	t.Run("SELECT different HUGEINT values", func(t *testing.T) {
 		tests := []string{
@@ -774,13 +812,13 @@ func TestHugeInt(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "too big for HUGEINT")
 	})
-
-	require.NoError(t, db.Close())
 }
 
 func TestTimestampTZ(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	_, err := db.Exec("CREATE TABLE IF NOT EXISTS tbl (tz TIMESTAMPTZ)")
 	require.NoError(t, err)
@@ -799,31 +837,33 @@ func TestTimestampTZ(t *testing.T) {
 	err = db.QueryRow("SELECT tz FROM tbl").Scan(&tz)
 	require.NoError(t, err)
 	require.Equal(t, ts.UTC(), tz)
-	require.NoError(t, db.Close())
 }
 
 func TestBoolean(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	var res bool
 	require.NoError(t, db.QueryRow("SELECT ?", true).Scan(&res))
-	require.Equal(t, true, res)
+	require.True(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", false).Scan(&res))
-	require.Equal(t, false, res)
+	require.False(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", 0).Scan(&res))
-	require.Equal(t, false, res)
+	require.False(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", 1).Scan(&res))
-	require.Equal(t, true, res)
-	require.NoError(t, db.Close())
+	require.True(t, res)
 }
 
 func TestTimestamp(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	tests := map[string]struct {
 		input string
@@ -841,12 +881,13 @@ func TestTimestamp(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, test.want, res)
 	}
-	require.NoError(t, db.Close())
 }
 
 func TestInterval(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	t.Run("INTERVAL binding", func(t *testing.T) {
 		interval := Interval{Days: 10, Months: 4, Micros: 4}
@@ -882,13 +923,38 @@ func TestInterval(t *testing.T) {
 			require.Equal(t, test.want, res)
 		}
 	})
+}
 
-	require.NoError(t, db.Close())
+func TestArray(t *testing.T) {
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE TABLE needle (vec FLOAT[3])`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO needle VALUES (array[5, 5, 5])`)
+	require.NoError(t, err)
+
+	res, err := db.Query(`SELECT vec FROM needle`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
+
+	for res.Next() {
+		var vec Composite[[3]float64]
+		err = res.Scan(&vec)
+		require.NoError(t, err)
+		require.NoError(t, res.Err())
+		require.Equal(t, [3]float64{5, 5, 5}, vec.Get())
+	}
 }
 
 func TestJSONType(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	defer VerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	_, err := db.Exec(`CREATE TABLE test (c1 STRUCT(index INTEGER))`)
 	require.NoError(t, err)
@@ -910,5 +976,4 @@ func TestJSONType(t *testing.T) {
 	require.Equal(t, float64(1), res.Get()["1"])
 	require.Equal(t, float64(2), res.Get()["2"])
 	require.Equal(t, float64(3), res.Get()["3"])
-	require.NoError(t, db.Close())
 }

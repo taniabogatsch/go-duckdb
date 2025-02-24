@@ -1,44 +1,74 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"database/sql/driver"
 	"errors"
-	"unsafe"
 )
 
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
 type Appender struct {
-	con            *Conn
-	schema         string
-	table          string
-	duckdbAppender C.duckdb_appender
-	closed         bool
+	conn     *Conn
+	schema   string
+	table    string
+	appender apiAppender
+	closed   bool
 
 	// The appender storage before flushing any data.
 	chunks []DataChunk
 	// The column types of the table to append to.
-	types []C.duckdb_logical_type
-	// A pointer to the allocated memory of the column types.
-	ptr unsafe.Pointer
+	types []apiLogicalType
 	// The number of appended rows.
 	rowCount int
 }
 
-// NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
-// The Appender appends to schema.table in the default catalog.
-func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
-	return newAppender(driverConn, "", schema, table)
+// NewAppenderFromConn returns a new Appender for the default catalog from a DuckDB driver connection.
+func NewAppenderFromConn(driverConn driver.Conn, schema string, table string) (*Appender, error) {
+	return NewAppender(driverConn, "", schema, table)
 }
 
 // NewAppender returns a new Appender from a DuckDB driver connection.
-// The Appender appends to catalog.schema.table.
-func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Appender, error) {
-	return newAppender(driverConn, catalog, schema, table)
+func NewAppender(driverConn driver.Conn, catalog string, schema string, table string) (*Appender, error) {
+	conn, ok := driverConn.(*Conn)
+	if !ok {
+		return nil, getError(errInvalidCon, nil)
+	}
+	if conn.closed {
+		return nil, getError(errClosedCon, nil)
+	}
+
+	var appender apiAppender
+	state := apiAppenderCreateExt(conn.conn, catalog, schema, table, &appender)
+	if apiState(state) == apiStateError {
+		err := getDuckDBError(apiAppenderError(appender))
+		apiAppenderDestroy(&appender)
+		return nil, getError(errAppenderCreation, err)
+	}
+
+	a := &Appender{
+		conn:     conn,
+		schema:   schema,
+		table:    table,
+		appender: appender,
+		rowCount: 0,
+	}
+
+	// Get the column types.
+	columnCount := apiAppenderColumnCount(appender)
+	for i := uint64(0); i < columnCount; i++ {
+		colType := apiAppenderColumnType(appender, i)
+		a.types = append(a.types, colType)
+
+		// Ensure that we only create an appender for supported column types.
+		t := Type(apiGetTypeId(colType))
+		name, found := unsupportedTypeToStringMap[t]
+		if found {
+			err := addIndexToError(unsupportedTypeError(name), int(i)+1)
+			destroyTypeSlice(a.types)
+			apiAppenderDestroy(&appender)
+			return nil, getError(errAppenderCreation, err)
+		}
+	}
+	return a, nil
 }
 
 // Flush the data chunks to the underlying table and clear the internal cache.
@@ -49,9 +79,9 @@ func (a *Appender) Flush() error {
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
 
-	state := C.duckdb_appender_flush(a.duckdbAppender)
-	if state == C.DuckDBError {
-		err := duckdbError(C.duckdb_appender_error(a.duckdbAppender))
+	state := apiAppenderFlush(a.appender)
+	if apiState(state) == apiStateError {
+		err := getDuckDBError(apiAppenderError(a.appender))
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
 	return nil
@@ -70,16 +100,16 @@ func (a *Appender) Close() error {
 
 	// We flush before closing to get a meaningful error message.
 	var errFlush error
-	state := C.duckdb_appender_flush(a.duckdbAppender)
-	if state == C.DuckDBError {
-		errFlush = duckdbError(C.duckdb_appender_error(a.duckdbAppender))
+	state := apiAppenderFlush(a.appender)
+	if apiState(state) == apiStateError {
+		errFlush = getDuckDBError(apiAppenderError(a.appender))
 	}
 
 	// Destroy all appender data and the appender.
-	destroyTypeSlice(a.ptr, a.types)
+	destroyTypeSlice(a.types)
 	var errClose error
-	state = C.duckdb_appender_destroy(&a.duckdbAppender)
-	if state == C.DuckDBError {
+	state = apiAppenderDestroy(&a.appender)
+	if apiState(state) == apiStateError {
 		errClose = errAppenderClose
 	}
 
@@ -103,71 +133,9 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	return nil
 }
 
-func newAppender(driverConn driver.Conn, catalog, schema, table string) (*Appender, error) {
-	con, ok := driverConn.(*Conn)
-	if !ok {
-		return nil, getError(errInvalidCon, nil)
-	}
-	if con.closed {
-		return nil, getError(errClosedCon, nil)
-	}
-
-	var cCatalog *C.char
-	if catalog != "" {
-		cCatalog = C.CString(catalog)
-		defer C.duckdb_free(unsafe.Pointer(cCatalog))
-	}
-
-	var cSchema *C.char
-	if schema != "" {
-		cSchema = C.CString(schema)
-		defer C.duckdb_free(unsafe.Pointer(cSchema))
-	}
-
-	cTable := C.CString(table)
-	defer C.duckdb_free(unsafe.Pointer(cTable))
-
-	var duckdbAppender C.duckdb_appender
-	state := C.duckdb_appender_create_ext(con.duckdbCon, cCatalog, cSchema, cTable, &duckdbAppender)
-
-	if state == C.DuckDBError {
-		// We destroy the error message when destroying the appender.
-		err := duckdbError(C.duckdb_appender_error(duckdbAppender))
-		C.duckdb_appender_destroy(&duckdbAppender)
-		return nil, getError(errAppenderCreation, err)
-	}
-
-	a := &Appender{
-		con:            con,
-		schema:         schema,
-		table:          table,
-		duckdbAppender: duckdbAppender,
-		rowCount:       0,
-	}
-
-	// Get the column types.
-	columnCount := int(C.duckdb_appender_column_count(duckdbAppender))
-	a.ptr, a.types = mallocTypeSlice(columnCount)
-	for i := 0; i < columnCount; i++ {
-		a.types[i] = C.duckdb_appender_column_type(duckdbAppender, C.idx_t(i))
-
-		// Ensure that we only create an appender for supported column types.
-		t := Type(C.duckdb_get_type_id(a.types[i]))
-		name, found := unsupportedTypeToStringMap[t]
-		if found {
-			err := addIndexToError(unsupportedTypeError(name), i+1)
-			destroyTypeSlice(a.ptr, a.types)
-			C.duckdb_appender_destroy(&duckdbAppender)
-			return nil, getError(errAppenderCreation, err)
-		}
-	}
-
-	return a, nil
-}
-
 func (a *Appender) addDataChunk() error {
 	var chunk DataChunk
-	if err := chunk.initFromTypes(a.ptr, a.types, true); err != nil {
+	if err := chunk.initFromTypes(a.types, true); err != nil {
 		return err
 	}
 	a.chunks = append(a.chunks, chunk)
@@ -202,7 +170,6 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 }
 
 func (a *Appender) appendDataChunks() error {
-	var state C.duckdb_state
 	var err error
 
 	for i, chunk := range a.chunks {
@@ -215,9 +182,9 @@ func (a *Appender) appendDataChunks() error {
 			break
 		}
 
-		state = C.duckdb_append_data_chunk(a.duckdbAppender, chunk.data)
-		if state == C.DuckDBError {
-			err = duckdbError(C.duckdb_appender_error(a.duckdbAppender))
+		state := apiAppendDataChunk(a.appender, chunk.chunk)
+		if apiState(state) == apiStateError {
+			err = getDuckDBError(apiAppenderError(a.appender))
 			break
 		}
 	}
@@ -231,19 +198,8 @@ func (a *Appender) appendDataChunks() error {
 	return err
 }
 
-func mallocTypeSlice(count int) (unsafe.Pointer, []C.duckdb_logical_type) {
-	var dummy C.duckdb_logical_type
-	size := C.size_t(unsafe.Sizeof(dummy))
-
-	ptr := unsafe.Pointer(C.malloc(C.size_t(count) * size))
-	slice := (*[1 << 30]C.duckdb_logical_type)(ptr)[:count:count]
-
-	return ptr, slice
-}
-
-func destroyTypeSlice(ptr unsafe.Pointer, slice []C.duckdb_logical_type) {
+func destroyTypeSlice(slice []apiLogicalType) {
 	for _, t := range slice {
-		C.duckdb_destroy_logical_type(&t)
+		apiDestroyLogicalType(&t)
 	}
-	C.duckdb_free(ptr)
 }

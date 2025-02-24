@@ -1,0 +1,20 @@
+name: Duplicate Mappings
+on:
+  workflow_dispatch:
+jobs:
+  update-mappings:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Duplicate Mappings
+        shell: bash
+        run: |
+          make duplicate.mapping OS_ARCH=darwin-amd64
+          make duplicate.mapping OS_ARCH=darwin-arm64
+          make duplicate.mapping OS_ARCH=linux-amd64
+          make duplicate.mapping OS_ARCH=linux-arm64
+          make duplicate.mapping OS_ARCH=windows-amd64
+      - name: Push Duplicated Mappings
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: push duplicated mappings
