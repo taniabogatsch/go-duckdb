@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"log"
 
-	"github.com/taniabogatsch/go-duckdb"
+	"github.com/taniabogatsch/go-duckdb/v2"
 )
 
 func main() {
