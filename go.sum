@@ -46,8 +46,8 @@ github.com/taniabogatsch/duckdb-go-bindings/linux-arm64 v0.0.2 h1:tazS8QGmSENw3Q
 github.com/taniabogatsch/duckdb-go-bindings/linux-arm64 v0.0.2/go.mod h1:W9eDTamDgccVVBUcqMGxk6y2B8uM8jSj7cwAvfM9XCg=
 github.com/taniabogatsch/duckdb-go-bindings/windows-amd64 v0.0.2 h1:daCuE/gGKX6V6VbN5ETjukoeecZ7l8UdlRgYLT3f+kM=
 github.com/taniabogatsch/duckdb-go-bindings/windows-amd64 v0.0.2/go.mod h1:H2UdYuCX/0WjOUVD+9QY86HkdjIz/t2f/DxYbPJx4DI=
-github.com/taniabogatsch/go-duckdb/arrowmapping v0.0.1 h1:l8uTcE8/oaKxCaMrami71eIsrvW9lgPVangcrL8mJG4=
-github.com/taniabogatsch/go-duckdb/arrowmapping v0.0.1/go.mod h1:nfEHSu3nR1g/UhCTTQtQYp0TJ1ap6nV9bMHFtlYnF5Y=
+github.com/taniabogatsch/go-duckdb/arrowmapping v0.0.2 h1:0p33aAtGDtv2ckNlUN/HUrRT3mPuFK5tz3MoCuqwajk=
+github.com/taniabogatsch/go-duckdb/arrowmapping v0.0.2/go.mod h1:4QRY22HP1ATre3M0SjCRywGEvaLHRMoTRML3FKWp5As=
 github.com/taniabogatsch/go-duckdb/mapping v0.0.2 h1:lk29RINqIGj1zOAVF55AIhGek6jL66KsjD1W6JGFVtk=
 github.com/taniabogatsch/go-duckdb/mapping v0.0.2/go.mod h1:TlRFVum1vSt21CfN8fZd3JXpP4JtBlKvtlZt3wri6Fs=
 github.com/zeebo/assert v1.3.0 h1:g7C04CbJuIDKNPFHmsk4hwZDO5O+kntRxzaUoNXj+IQ=

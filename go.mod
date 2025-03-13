@@ -7,7 +7,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
-	github.com/taniabogatsch/go-duckdb/arrowmapping v0.0.1
+	github.com/taniabogatsch/go-duckdb/arrowmapping v0.0.2
 	github.com/taniabogatsch/go-duckdb/mapping v0.0.2
 )
 
