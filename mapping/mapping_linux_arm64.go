@@ -3,7 +3,7 @@
 package mapping
 
 import (
-	bindings "github.com/duckdb/duckdb-go-bindings/linux-arm64"
+	bindings "github.com/taniabogatsch/duckdb-go-bindings/linux-arm64"
 )
 
 // Enums
@@ -319,7 +319,7 @@ var (
 	ProfilingInfoGetMetrics                 = bindings.ProfilingInfoGetMetrics
 	ProfilingInfoGetChildCount              = bindings.ProfilingInfoGetChildCount
 	ProfilingInfoGetChild                   = bindings.ProfilingInfoGetChild
-	AppenderCreate                          = bindings.AppenderCreate
+	AppenderCreateExt                       = bindings.AppenderCreateExt
 	AppenderColumnCount                     = bindings.AppenderColumnCount
 	AppenderColumnType                      = bindings.AppenderColumnType
 	AppenderError                           = bindings.AppenderError
