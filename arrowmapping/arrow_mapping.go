@@ -3,7 +3,7 @@
 package arrowmapping
 
 import (
-	bindings "github.com/duckdb/duckdb-go-bindings"
+	bindings "github.com/taniabogatsch/duckdb-go-bindings"
 )
 
 // Pointers
