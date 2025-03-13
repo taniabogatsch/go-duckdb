@@ -3,7 +3,7 @@ package duckdb
 import (
 	"database/sql"
 
-	"github.com/marcboeker/go-duckdb/mapping"
+	"github.com/taniabogatsch/go-duckdb/mapping"
 )
 
 // ProfilingInfo is a recursive type containing metrics for each node in DuckDB's query plan.

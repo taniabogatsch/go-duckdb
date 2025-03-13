@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/marcboeker/go-duckdb/mapping"
+	"github.com/taniabogatsch/go-duckdb/mapping"
 )
 
 func init() {

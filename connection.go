@@ -7,7 +7,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/marcboeker/go-duckdb/mapping"
+	"github.com/taniabogatsch/go-duckdb/mapping"
 )
 
 // Conn holds a connection to a DuckDB database.

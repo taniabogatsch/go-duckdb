@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marcboeker/go-duckdb/mapping"
+	"github.com/taniabogatsch/go-duckdb/mapping"
 )
 
 // rows is a helper struct for scanning a duckdb result.
