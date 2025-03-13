@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
 	github.com/taniabogatsch/go-duckdb/arrowmapping v0.0.1
-	github.com/taniabogatsch/go-duckdb/mapping v0.0.1
+	github.com/taniabogatsch/go-duckdb/mapping v0.0.2
 )
 
 require (
@@ -20,7 +20,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/taniabogatsch/duckdb-go-bindings v0.0.3 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/custom-duckdb-linux-amd64 v0.0.2 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/custom-duckdb-linux-amd64 v0.0.3 // indirect
 	github.com/taniabogatsch/duckdb-go-bindings/darwin-amd64 v0.0.2 // indirect
 	github.com/taniabogatsch/duckdb-go-bindings/darwin-arm64 v0.0.2 // indirect
 	github.com/taniabogatsch/duckdb-go-bindings/linux-arm64 v0.0.2 // indirect
