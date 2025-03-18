@@ -3,6 +3,8 @@ package duckdb
 import (
 	"database/sql/driver"
 	"errors"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
@@ -10,13 +12,13 @@ type Appender struct {
 	conn     *Conn
 	schema   string
 	table    string
-	appender apiAppender
+	appender mapping.Appender
 	closed   bool
 
 	// The appender storage before flushing any data.
 	chunks []DataChunk
 	// The column types of the table to append to.
-	types []apiLogicalType
+	types []mapping.LogicalType
 	// The number of appended rows.
 	rowCount int
 }
@@ -31,11 +33,11 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 		return nil, getError(errClosedCon, nil)
 	}
 
-	var appender apiAppender
-	state := apiAppenderCreate(conn.conn, schema, table, &appender)
-	if apiState(state) == apiStateError {
-		err := getDuckDBError(apiAppenderError(appender))
-		apiAppenderDestroy(&appender)
+	var appender mapping.Appender
+	state := mapping.AppenderCreate(conn.conn, schema, table, &appender)
+	if state == mapping.StateError {
+		err := getDuckDBError(mapping.AppenderError(appender))
+		mapping.AppenderDestroy(&appender)
 		return nil, getError(errAppenderCreation, err)
 	}
 
@@ -48,21 +50,22 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	}
 
 	// Get the column types.
-	columnCount := apiAppenderColumnCount(appender)
-	for i := uint64(0); i < columnCount; i++ {
-		colType := apiAppenderColumnType(appender, i)
+	columnCount := mapping.AppenderColumnCount(appender)
+	for i := mapping.IdxT(0); i < columnCount; i++ {
+		colType := mapping.AppenderColumnType(appender, i)
 		a.types = append(a.types, colType)
 
 		// Ensure that we only create an appender for supported column types.
-		t := Type(apiGetTypeId(colType))
+		t := mapping.GetTypeId(colType)
 		name, found := unsupportedTypeToStringMap[t]
 		if found {
 			err := addIndexToError(unsupportedTypeError(name), int(i)+1)
 			destroyTypeSlice(a.types)
-			apiAppenderDestroy(&appender)
+			mapping.AppenderDestroy(&appender)
 			return nil, getError(errAppenderCreation, err)
 		}
 	}
+
 	return a, nil
 }
 
@@ -73,12 +76,11 @@ func (a *Appender) Flush() error {
 	if err := a.appendDataChunks(); err != nil {
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
-
-	state := apiAppenderFlush(a.appender)
-	if apiState(state) == apiStateError {
-		err := getDuckDBError(apiAppenderError(a.appender))
+	if mapping.AppenderFlush(a.appender) == mapping.StateError {
+		err := getDuckDBError(mapping.AppenderError(a.appender))
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
+
 	return nil
 }
 
@@ -95,16 +97,14 @@ func (a *Appender) Close() error {
 
 	// We flush before closing to get a meaningful error message.
 	var errFlush error
-	state := apiAppenderFlush(a.appender)
-	if apiState(state) == apiStateError {
-		errFlush = getDuckDBError(apiAppenderError(a.appender))
+	if mapping.AppenderFlush(a.appender) == mapping.StateError {
+		errFlush = getDuckDBError(mapping.AppenderError(a.appender))
 	}
 
 	// Destroy all appender data and the appender.
 	destroyTypeSlice(a.types)
 	var errClose error
-	state = apiAppenderDestroy(&a.appender)
-	if apiState(state) == apiStateError {
+	if mapping.AppenderDestroy(&a.appender) == mapping.StateError {
 		errClose = errAppenderClose
 	}
 
@@ -112,6 +112,7 @@ func (a *Appender) Close() error {
 	if err != nil {
 		return getError(invalidatedAppenderError(err), nil)
 	}
+
 	return nil
 }
 
@@ -125,6 +126,7 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	if err != nil {
 		return getError(errAppenderAppendRow, err)
 	}
+
 	return nil
 }
 
@@ -134,6 +136,7 @@ func (a *Appender) addDataChunk() error {
 		return err
 	}
 	a.chunks = append(a.chunks, chunk)
+
 	return nil
 }
 
@@ -159,8 +162,8 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 			return err
 		}
 	}
-
 	a.rowCount++
+
 	return nil
 }
 
@@ -176,10 +179,8 @@ func (a *Appender) appendDataChunks() error {
 		if err = chunk.SetSize(size); err != nil {
 			break
 		}
-
-		state := apiAppendDataChunk(a.appender, chunk.chunk)
-		if apiState(state) == apiStateError {
-			err = getDuckDBError(apiAppenderError(a.appender))
+		if mapping.AppendDataChunk(a.appender, chunk.chunk) == mapping.StateError {
+			err = getDuckDBError(mapping.AppenderError(a.appender))
 			break
 		}
 	}
@@ -187,14 +188,14 @@ func (a *Appender) appendDataChunks() error {
 	for _, chunk := range a.chunks {
 		chunk.close()
 	}
-
 	a.chunks = a.chunks[:0]
 	a.rowCount = 0
+
 	return err
 }
 
-func destroyTypeSlice(slice []apiLogicalType) {
+func destroyTypeSlice(slice []mapping.LogicalType) {
 	for _, t := range slice {
-		apiDestroyLogicalType(&t)
+		mapping.DestroyLogicalType(&t)
 	}
 }
