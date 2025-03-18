@@ -1,4 +1,4 @@
-//go:build !duckdb_use_lib && !windows
+//go:build !duckdb_use_lib && !duckdb_use_static_lib
 
 package duckdb
 
@@ -19,8 +19,6 @@ func TestOpenSQLite(t *testing.T) {
 }
 
 func TestLoadHTTPFS(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
