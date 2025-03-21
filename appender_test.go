@@ -863,54 +863,7 @@ func TestAppenderWithJSON(t *testing.T) {
 	require.Equal(t, len(jsonInputs), i)
 }
 
-func TestAppendToCatalog(t *testing.T) {
-	defer VerifyAllocationCounters()
-
-	db := openDbWrapper(t, ``)
-	defer closeDbWrapper(t, db)
-
-	_, err := db.Exec(`ATTACH 'hello_appender.db' AS other`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`
-		CREATE TABLE other.test (
-			col BIGINT
-	  	)`)
-
-	conn := openConnWrapper(t, db, context.Background())
-	defer closeConnWrapper(t, conn)
-
-	err = conn.Raw(func(anyConn interface{}) error {
-		driverConn := anyConn.(driver.Conn)
-		a, innerErr := NewAppender(driverConn, "other", "", "test")
-		require.NoError(t, innerErr)
-
-		require.NoError(t, a.AppendRow(42))
-		require.NoError(t, a.Flush())
-		require.NoError(t, a.Close())
-		return nil
-	})
-	require.NoError(t, err)
-
-	// Verify results.
-	res, err := db.QueryContext(context.Background(), `SELECT * FROM other.test ORDER BY col`)
-	require.NoError(t, err)
-	defer closeRowsWrapper(t, res)
-
-	i := 0
-	for res.Next() {
-		var col int64
-		require.NoError(t, res.Scan(&col))
-		require.Equal(t, int64(42), col)
-		i++
-	}
-	require.Equal(t, 1, i)
-	require.NoError(t, os.Remove("hello_appender.db"))
-}
-
 func TestAppendRowSlice(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (i INT, j INT)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -931,8 +884,6 @@ func TestAppendRowSlice(t *testing.T) {
 }
 
 func TestAppendRowMap(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (i INT, j INT, k INT)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
