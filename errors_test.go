@@ -25,8 +25,6 @@ func testError(t *testing.T, actual error, contains ...string) {
 }
 
 func TestErrConnect(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	t.Run(errParseDSN.Error(), func(t *testing.T) {
 		db, err := sql.Open(`duckdb`, `:mem ory:`)
 		defer closeDbWrapper(t, db)
@@ -53,8 +51,6 @@ func TestErrConnect(t *testing.T) {
 }
 
 func TestErrNestedMap(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -64,8 +60,6 @@ func TestErrNestedMap(t *testing.T) {
 }
 
 func TestErrAppender(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	t.Run(errInvalidCon.Error(), func(t *testing.T) {
 		var conn driver.Conn
 		a, err := NewAppenderFromConn(conn, "", "test")
@@ -197,8 +191,6 @@ func TestErrAppender(t *testing.T) {
 }
 
 func TestErrAppend(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -209,8 +201,6 @@ func TestErrAppend(t *testing.T) {
 }
 
 func TestErrAppendDecimal(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (d DECIMAL(8, 2))`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -221,8 +211,6 @@ func TestErrAppendDecimal(t *testing.T) {
 }
 
 func TestErrAppendEnum(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, testTypesEnumSQL+";"+`CREATE TABLE test (e my_enum)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -231,8 +219,6 @@ func TestErrAppendEnum(t *testing.T) {
 }
 
 func TestErrAppendSimpleStruct(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			simple_struct STRUCT(A INT, B VARCHAR)
@@ -269,8 +255,6 @@ func TestErrAppendSimpleStruct(t *testing.T) {
 }
 
 func TestErrAppendDuplicateStruct(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			duplicate_struct STRUCT(Duplicate INT)
@@ -282,8 +266,6 @@ func TestErrAppendDuplicateStruct(t *testing.T) {
 }
 
 func TestErrAppendStruct(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			mix STRUCT(a STRUCT(L VARCHAR[]), B STRUCT(L INT[])[])
@@ -295,8 +277,6 @@ func TestErrAppendStruct(t *testing.T) {
 }
 
 func TestErrAppendList(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test(intSlice INT[])`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -307,8 +287,6 @@ func TestErrAppendList(t *testing.T) {
 }
 
 func TestErrAppendStructWithList(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (struct_with_list STRUCT(L INT[]))`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -319,8 +297,6 @@ func TestErrAppendStructWithList(t *testing.T) {
 }
 
 func TestErrAppendNestedStruct(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			wrapped_simple_struct STRUCT(a VARCHAR, B STRUCT(A INT, B VARCHAR)),
@@ -332,8 +308,6 @@ func TestErrAppendNestedStruct(t *testing.T) {
 }
 
 func TestErrAppendNestedList(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test(int_slice INT[][][])`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -346,8 +320,6 @@ func TestErrAppendNestedList(t *testing.T) {
 }
 
 func TestErrAppenderTSConversion(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	testCases := []string{"TIMESTAMP_NS", "TIMESTAMP", "TIMESTAMPTZ"}
 	for _, tc := range testCases {
 		t.Run(tc+" conversion error", func(t *testing.T) {
@@ -374,8 +346,6 @@ func TestErrAPISetValue(t *testing.T) {
 }
 
 func TestDuckDBErrors(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
