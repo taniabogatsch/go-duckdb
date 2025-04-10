@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/marcboeker/go-duckdb/mapping"
+	"github.com/taniabogatsch/go-duckdb/mapping"
 )
 
 var GetInstanceCache = sync.OnceValue[mapping.InstanceCache](
