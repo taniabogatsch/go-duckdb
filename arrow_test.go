@@ -8,6 +8,8 @@ import (
 	"database/sql/driver"
 	"testing"
 
+	"github.com/marcboeker/go-duckdb/mapping"
+
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/memory"
@@ -15,6 +17,8 @@ import (
 )
 
 func TestArrow(t *testing.T) {
+	defer mapping.VerifyAllocationCounters()
+
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -198,6 +202,8 @@ func TestArrow(t *testing.T) {
 }
 
 func TestArrowClosedConn(t *testing.T) {
+	defer mapping.VerifyAllocationCounters()
+
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
