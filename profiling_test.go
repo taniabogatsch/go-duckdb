@@ -47,6 +47,10 @@ func TestErrProfiling(t *testing.T) {
 }
 
 func TestLogging(t *testing.T) {
+	defer func() {
+		require.NoError(t, os.Remove("file_read.db"))
+	}()
+
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -99,6 +103,4 @@ func TestLogging(t *testing.T) {
 	// Clear logs.
 	_, err = conn.ExecContext(ctx, `PRAGMA truncate_duckdb_logs`)
 	require.NoError(t, err)
-
-	require.NoError(t, os.Remove("file_read.db"))
 }
