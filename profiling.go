@@ -2,9 +2,17 @@ package duckdb
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/taniabogatsch/go-duckdb/mapping"
 )
+
+type metrics struct {
+	bind        time.Duration
+	prepare     time.Duration
+	exec        time.Duration
+	execPending time.Duration
+}
 
 // ProfilingInfo is a recursive type containing metrics for each node in DuckDB's query plan.
 // There are two types of nodes: the QUERY_ROOT and OPERATOR nodes.
@@ -61,4 +69,17 @@ func (info *ProfilingInfo) getMetrics(profilingInfo mapping.ProfilingInfo) {
 		childInfo.getMetrics(profilingInfoChild)
 		info.Children = append(info.Children, childInfo)
 	}
+}
+
+func GetMetrics(c *sql.Conn) map[string]time.Duration {
+	m := make(map[string]time.Duration)
+	_ = c.Raw(func(driverConn any) error {
+		conn := driverConn.(*Conn)
+		m["goBindTime"] = conn.m.bind
+		m["goPrepareTime"] = conn.m.prepare
+		m["goExecTime"] = conn.m.exec
+		m["goExecPending"] = conn.m.execPending
+		return nil
+	})
+	return m
 }

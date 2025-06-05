@@ -104,3 +104,36 @@ func TestLogging(t *testing.T) {
 	_, err = conn.ExecContext(ctx, `PRAGMA truncate_duckdb_logs`)
 	require.NoError(t, err)
 }
+
+func TestMetrics(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	ctx := context.Background()
+
+	conn := openConnWrapper(t, db, ctx)
+	defer closeConnWrapper(t, conn)
+
+	var v int64
+	r := conn.QueryRowContext(ctx, `SELECT MAX(range + ?)::BIGINT FROM range(100)`, 43)
+	require.NoError(t, r.Scan(&v))
+	require.Equal(t, int64(142), v)
+
+	m := GetMetrics(conn)
+
+	val, ok := m["goBindTime"]
+	require.True(t, ok)
+	require.True(t, val > 0)
+
+	val, ok = m["goPrepareTime"]
+	require.True(t, ok)
+	require.True(t, val > 0)
+
+	val, ok = m["goExecTime"]
+	require.True(t, ok)
+	require.True(t, val > 0)
+
+	val, ok = m["goExecPending"]
+	require.True(t, ok)
+	require.True(t, val > 0)
+}
