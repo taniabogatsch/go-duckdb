@@ -2,8 +2,9 @@ package duckdb
 
 import (
 	"fmt"
-	"github.com/taniabogatsch/go-duckdb/mapping"
 	"reflect"
+
+	"github.com/taniabogatsch/go-duckdb/mapping"
 )
 
 func getValue(info TypeInfo, v mapping.Value) (any, error) {
