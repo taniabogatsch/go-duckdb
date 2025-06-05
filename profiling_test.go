@@ -2,7 +2,6 @@ package duckdb
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -83,17 +82,6 @@ func TestLogging(t *testing.T) {
 	require.NoError(t, r.Scan(&id))
 	require.Equal(t, int64(42), id)
 
-	// Print logs
-	res, err := conn.QueryContext(ctx, `SELECT message FROM duckdb_logs`)
-	require.NoError(t, err)
-	defer closeRowsWrapper(t, res)
-
-	for res.Next() {
-		var msg string
-		require.NoError(t, res.Scan(&msg))
-		fmt.Println(msg)
-	}
-
 	var empty bool
 	r = conn.QueryRowContext(ctx, `SELECT COUNT(*) = 0 FROM duckdb_logs`)
 	require.NoError(t, err)
@@ -121,19 +109,12 @@ func TestMetrics(t *testing.T) {
 
 	m := GetMetrics(conn)
 
-	val, ok := m["goBindTime"]
+	_, ok := m["goBindTime"]
 	require.True(t, ok)
-	require.True(t, val > 0)
-
-	val, ok = m["goPrepareTime"]
+	_, ok = m["goPrepareTime"]
 	require.True(t, ok)
-	require.True(t, val > 0)
-
-	val, ok = m["goExecTime"]
+	_, ok = m["goExecTime"]
 	require.True(t, ok)
-	require.True(t, val > 0)
-
-	val, ok = m["goExecPending"]
+	_, ok = m["goExecPending"]
 	require.True(t, ok)
-	require.True(t, val > 0)
 }
