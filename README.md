@@ -4,14 +4,15 @@
 
 The DuckDB driver conforms to the built-in `database/sql` interface.
 
-**Current DuckDB version: `v1.2.2`.**
+**Current DuckDB version: `v1.3.0`.**
 
-The first go-duckdb tag with that version is `v2.2.0`.
+The first go-duckdb tag with that version is `v2.3.0`.
 
 Previous DuckDB versions:
 
 | DuckDB   | go-duckdb |
 |----------|-----------|
+| `v1.2.2` | `v2.2.0`  |
 | `v1.2.1` | `v2.1.0`  |
 | `v1.2.0` | `v2.0.3`  |
 | `v1.1.3` | `v1.8.5`  |
@@ -152,7 +153,12 @@ CGO_ENABLED=1 CPPFLAGS="-DDUCKDB_STATIC_BUILD" CGO_LDFLAGS="-lduckdb_bundle -lc+
 ```
 
 You can also find these steps in the `Makefile` and the `tests.yaml`.
-The DuckDB team also publishes some pre-built bundled libraries as part of their [releases](https://github.com/duckdb/duckdb/releases).
+
+The DuckDB team also publishes pre-built libraries as part of their [releases](https://github.com/duckdb/duckdb/releases).
+The published zipped archives contain libraries for DuckDB core, the third-party libraries, and the default extensions.
+When linking, you might want to bundle these libraries into a single archive first.
+You can use any archive tool (e.g., `ar`). 
+DuckDB's `bundle-library` Makefile target contains an example of `ar`, or you can look at the Docker file [here](https://github.com/duckdb/duckdb/issues/17312#issuecomment-2885130728).
 
 #### Note on FreeBSD
 
@@ -212,7 +218,11 @@ DuckDB lives in process.
 Therefore, all its memory lives in the driver. 
 All allocations live in the host process, which is the Go application. 
 Especially for long-running applications, it is crucial to call the corresponding `Close`-functions as specified in [database/sql](https://godoc.org/database/sql). 
-The following is a list of examples.
+
+Additionally, it is crucial to call `Close()` on the database and/or connector of a persistent DuckDB database.
+That way, DuckDB synchronizes all changes from the WAL to its persistent storage.
+
+The following is a list of examples of `Close()`-functions.
 
 ```go
 db, err := sql.Open("duckdb", "")

@@ -39,11 +39,9 @@ var testPrimitiveSQLValues = map[Type]testTypeValues{
 	TYPE_TIMESTAMP_MS: {input: `TIMESTAMP_MS '1992-09-20 11:30:00.123'`, output: `1992-09-20 11:30:00.123`},
 	TYPE_TIMESTAMP_NS: {input: `TIMESTAMP_NS '1992-09-20 11:30:00.123456789'`, output: `1992-09-20 11:30:00.123456789`},
 	TYPE_UUID:         {input: `uuid()`, output: ``},
-	TYPE_TIME_TZ:      {input: `TIMETZ '1992-09-20 11:30:00.123456+06'`, output: `05:30:00.123456+00`},
-	TYPE_TIMESTAMP_TZ: {input: `TIMESTAMPTZ '1992-09-20 11:30:00.123456'`, output: `1992-09-20 11:30:00.123456+00`},
 }
 
-func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
+func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 	var primitiveTypes []Type
 	for k := range typeToStringMap {
 		_, inMap := unsupportedTypeToStringMap[k]
@@ -53,8 +51,13 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 		if k == TYPE_ANY && !useAny {
 			continue
 		}
+		if skipTZ {
+			if k == TYPE_TIMESTAMP_TZ || k == TYPE_TIME_TZ {
+				continue
+			}
+		}
 		switch k {
-		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_SQLNULL:
+		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION, TYPE_SQLNULL:
 			continue
 		}
 		primitiveTypes = append(primitiveTypes, k)
@@ -183,25 +186,59 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 		},
 	}
 
+	unionIntInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	unionStringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	info, err = NewUnionInfo(
+		[]TypeInfo{unionIntInfo, unionStringInfo},
+		[]string{"int_val", "str_val"},
+	)
+	require.NoError(t, err)
+	unionTypeInfo := testTypeInfo{
+		TypeInfo: info,
+		testTypeValues: testTypeValues{
+			input:  `UNION_VALUE(int_val := 1::INTEGER)`,
+			output: `1`,
+		},
+	}
+
 	testTypeInfos = append(testTypeInfos, decimalTypeInfo, enumTypeInfo,
 		listTypeInfo, nestedListTypeInfo, structTypeInfo, nestedStructTypeInfo, mapTypeInfo,
-		arrayTypeInfo, nestedArrayTypeInfo)
+		arrayTypeInfo, nestedArrayTypeInfo, unionTypeInfo)
 	return testTypeInfos
 }
 
 func TestTypeInterface(t *testing.T) {
-	testTypeInfos := getTypeInfos(t, true)
+	testTypeInfos := getTypeInfos(t, true, false)
 
 	// Use each type as a child.
 	for _, info := range testTypeInfos {
 		_, err := NewListInfo(info.TypeInfo)
 		require.NoError(t, err)
 	}
+
+	// Test UNION type creation.
+	unionIntInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	unionStringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	unionInfo, err := NewUnionInfo(
+		[]TypeInfo{unionIntInfo, unionStringInfo},
+		[]string{"int_val", "str_val"},
+	)
+	require.NoError(t, err)
+
+	// Verify that we can use the UNION type as a child type.
+	_, err = NewListInfo(unionInfo)
+	require.NoError(t, err)
 }
 
 func TestErrTypeInfo(t *testing.T) {
 	var incorrectTypes []Type
-	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY)
+	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION)
 
 	for _, incorrect := range incorrectTypes {
 		_, err := NewTypeInfo(incorrect)
@@ -277,4 +314,35 @@ func TestErrTypeInfo(t *testing.T) {
 
 	_, err = NewArrayInfo(nil, 3)
 	testError(t, err, errAPI.Error(), interfaceIsNilErrMsg)
+
+	// Invalid UNION types.
+	unionIntInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	unionStringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	// Test empty members.
+	_, err = NewUnionInfo([]TypeInfo{}, []string{})
+	testError(t, err, errAPI.Error(), "UNION type must have at least one member")
+
+	// Test mismatched lengths.
+	_, err = NewUnionInfo(
+		[]TypeInfo{unionIntInfo, unionStringInfo},
+		[]string{"single_name"},
+	)
+	testError(t, err, errAPI.Error(), "member types and names must have the same length")
+
+	// Test empty name.
+	_, err = NewUnionInfo(
+		[]TypeInfo{unionIntInfo},
+		[]string{""},
+	)
+	testError(t, err, errAPI.Error(), errEmptyName.Error())
+
+	// Test duplicate names.
+	_, err = NewUnionInfo(
+		[]TypeInfo{unionIntInfo, unionStringInfo},
+		[]string{"same_name", "same_name"},
+	)
+	testError(t, err, errAPI.Error(), duplicateNameErrMsg)
 }

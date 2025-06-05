@@ -20,12 +20,12 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings v0.0.4 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/custom-duckdb-linux-amd64 v0.0.4 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/darwin-amd64 v0.0.3 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/darwin-arm64 v0.0.3 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/linux-arm64 v0.0.3 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/windows-amd64 v0.0.3 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings v0.0.5 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/custom-duckdb-linux-amd64 v0.0.5 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/darwin-amd64 v0.0.4 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/darwin-arm64 v0.0.4 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/linux-arm64 v0.0.4 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/windows-amd64 v0.0.4 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	golang.org/x/exp v0.0.0-20250128182459-e0ece0dbea4c // indirect
 	golang.org/x/mod v0.22.0 // indirect

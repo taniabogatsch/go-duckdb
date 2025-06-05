@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -410,4 +411,126 @@ func TestPreparePivot(t *testing.T) {
 	require.Equal(t, "Netherlands", name)
 	require.Equal(t, 42, population)
 	closePreparedWrapper(t, prepared)
+}
+
+func TestBindWithoutResolvedParams(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	d := time.Date(2022, 0o2, 0o7, 0, 0, 0, 0, time.UTC)
+
+	r := db.QueryRow(`SELECT a::VARCHAR, b::VARCHAR FROM (VALUES (?, ?)) t(a, b)`, d, d)
+	require.NoError(t, r.Err())
+
+	var a, b string
+	require.NoError(t, r.Scan(&a, &b))
+	require.Equal(t, "2022-02-07 00:00:00", a)
+	require.Equal(t, "2022-02-07 00:00:00", b)
+
+	// Type without a fallback.
+	s := []int32{1}
+	r = db.QueryRow(`SELECT a::VARCHAR, b::VARCHAR FROM (VALUES (?, ?)) t(a, b)`, s, s)
+	require.Contains(t, r.Err().Error(), "unsupported data type")
+}
+
+func TestBindTimestampTypes(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE OR REPLACE TABLE foo(a TIMESTAMP, b TIMESTAMP_S, c TIMESTAMP_MS, d TIMESTAMP_NS)`)
+	require.NoError(t, err)
+
+	tm := time.Date(2025, time.May, 7, 11, 45, 10, 123456789, time.UTC)
+	_, err = db.Exec(`INSERT INTO foo VALUES(?, ?, ?, ?)`, tm, tm, tm, tm)
+	require.NoError(t, err)
+
+	r := db.QueryRow(`SELECT a, b, c, d FROM foo`)
+	require.NoError(t, r.Err())
+
+	var a, b, c, d time.Time
+	err = r.Scan(&a, &b, &c, &d)
+	require.NoError(t, err)
+
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 123456000, time.UTC), a)
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 0, time.UTC), b)
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 123000000, time.UTC), c)
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 123456789, time.UTC), d)
+}
+
+func TestPrepareComplex(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	ctx := context.Background()
+	createTable(t, db, `CREATE OR REPLACE TABLE arr_test(
+		arr_int INTEGER[2],
+		list_str VARCHAR[],
+		str_col STRUCT(v VARCHAR, i INTEGER)
+	)`)
+
+	// Insert parameters.
+	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES (?, ?, ?)`,
+		[]int32{7, 1}, []string{"foo", "bar"}, map[string]any{"v": "baz", "i": int32(42)})
+	require.NoError(t, err)
+
+	prepared, err := db.Prepare(`SELECT * FROM arr_test
+		WHERE arr_int = ? AND list_str = ? AND str_col = ?`)
+	defer closePreparedWrapper(t, prepared)
+	require.NoError(t, err)
+
+	var arr Composite[[]int32]
+	var list Composite[[]string]
+	var struc Composite[map[string]any]
+
+	// Test with `any` slice types.
+	err = prepared.QueryRow(
+		[]any{int32(7), int32(1)},
+		[]any{"foo", "bar"},
+		map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
+
+	// Test with specific slice types.
+	err = prepared.QueryRow(
+		[]int32{7, 1},
+		[]string{"foo", "bar"},
+		map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
+
+	// Test querying without a prepared statement.
+	err = db.QueryRow(`SELECT * FROM arr_test
+		WHERE arr_int = ? AND list_str = ? AND str_col = ?`,
+		[]int32{7, 1}, []string{"foo", "bar"}, map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
+}
+
+func TestBindJSON(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE TABLE tbl (j JSON)`)
+	require.NoError(t, err)
+
+	jsonData := []byte(`{"name": "Jimmy","age": 28}`)
+	_, err = db.Exec(`INSERT INTO tbl VALUES (?)`, jsonData)
+	require.NoError(t, err)
+
+	var str string
+	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl`).Scan(&str)
+	require.NoError(t, err)
+	require.Equal(t, string(jsonData), str)
 }

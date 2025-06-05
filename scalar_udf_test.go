@@ -20,6 +20,8 @@ type (
 	typesSUDF         struct{}
 	variadicSUDF      struct{}
 	anyTypeSUDF       struct{}
+	unionTestSUDF     struct{}
+	getConnIdUDF      struct{}
 	errExecutorSUDF   struct{}
 	errInputNilSUDF   struct{}
 	errResultNilSUDF  struct{}
@@ -68,12 +70,29 @@ func constantError([]driver.Value) (any, error) {
 	return nil, errors.New("test invalid execution")
 }
 
+type testCtxKeyType string
+
+const testCtxKey testCtxKeyType = "my_conn_id"
+
+func getConnId(ctx context.Context, values []driver.Value) (any, error) {
+	if ctx == nil {
+		return nil, errors.New("context is nil")
+	}
+
+	id, ok := ctx.Value(testCtxKey).(uint64)
+	if !ok {
+		return nil, errors.New("context does not contain the connection id")
+	}
+
+	return id, nil
+}
+
 func (*simpleSUDF) Config() ScalarFuncConfig {
 	return ScalarFuncConfig{[]TypeInfo{currentInfo, currentInfo}, currentInfo, nil, false, false}
 }
 
 func (*simpleSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{simpleSum}
+	return ScalarFuncExecutor{RowExecutor: simpleSum}
 }
 
 func (*constantSUDF) Config() ScalarFuncConfig {
@@ -81,7 +100,7 @@ func (*constantSUDF) Config() ScalarFuncConfig {
 }
 
 func (*constantSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{constantOne}
+	return ScalarFuncExecutor{RowExecutor: constantOne}
 }
 
 func (*otherConstantSUDF) Config() ScalarFuncConfig {
@@ -89,7 +108,7 @@ func (*otherConstantSUDF) Config() ScalarFuncConfig {
 }
 
 func (*otherConstantSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{constantOne}
+	return ScalarFuncExecutor{RowExecutor: constantOne}
 }
 
 func (*typesSUDF) Config() ScalarFuncConfig {
@@ -97,7 +116,7 @@ func (*typesSUDF) Config() ScalarFuncConfig {
 }
 
 func (*typesSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{identity}
+	return ScalarFuncExecutor{RowExecutor: identity}
 }
 
 func (*variadicSUDF) Config() ScalarFuncConfig {
@@ -105,7 +124,7 @@ func (*variadicSUDF) Config() ScalarFuncConfig {
 }
 
 func (*variadicSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{variadicSum}
+	return ScalarFuncExecutor{RowExecutor: variadicSum}
 }
 
 func (*anyTypeSUDF) Config() ScalarFuncConfig {
@@ -118,7 +137,15 @@ func (*anyTypeSUDF) Config() ScalarFuncConfig {
 }
 
 func (*anyTypeSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{nilCount}
+	return ScalarFuncExecutor{RowExecutor: nilCount}
+}
+
+func (*getConnIdUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{[]TypeInfo{}, currentInfo, nil, false, false}
+}
+
+func (*getConnIdUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{RowContextExecutor: getConnId}
 }
 
 func (*errExecutorSUDF) Config() ScalarFuncConfig {
@@ -127,7 +154,7 @@ func (*errExecutorSUDF) Config() ScalarFuncConfig {
 }
 
 func (*errExecutorSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{nil}
+	return ScalarFuncExecutor{RowExecutor: nil}
 }
 
 func (*errInputNilSUDF) Config() ScalarFuncConfig {
@@ -135,7 +162,7 @@ func (*errInputNilSUDF) Config() ScalarFuncConfig {
 }
 
 func (*errInputNilSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{constantOne}
+	return ScalarFuncExecutor{RowExecutor: constantOne}
 }
 
 func (*errResultNilSUDF) Config() ScalarFuncConfig {
@@ -143,7 +170,7 @@ func (*errResultNilSUDF) Config() ScalarFuncConfig {
 }
 
 func (*errResultNilSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{constantOne}
+	return ScalarFuncExecutor{RowExecutor: constantOne}
 }
 
 func (*errResultAnySUDF) Config() ScalarFuncConfig {
@@ -156,7 +183,7 @@ func (*errResultAnySUDF) Config() ScalarFuncConfig {
 }
 
 func (*errResultAnySUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{constantOne}
+	return ScalarFuncExecutor{RowExecutor: constantOne}
 }
 
 func (*errExecSUDF) Config() ScalarFuncConfig {
@@ -165,7 +192,22 @@ func (*errExecSUDF) Config() ScalarFuncConfig {
 }
 
 func (*errExecSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{constantError}
+	return ScalarFuncExecutor{RowExecutor: constantError}
+}
+
+func (*unionTestSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{
+		InputTypeInfos: []TypeInfo{currentInfo},
+		ResultTypeInfo: currentInfo,
+	}
+}
+
+func (*unionTestSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: func(values []driver.Value) (any, error) {
+			return values[0], nil
+		},
+	}
 }
 
 func TestSimpleScalarUDF(t *testing.T) {
@@ -227,7 +269,7 @@ func TestConstantScalarUDF(t *testing.T) {
 }
 
 func TestAllTypesScalarUDF(t *testing.T) {
-	typeInfos := getTypeInfos(t, false)
+	typeInfos := getTypeInfos(t, false, true)
 	for _, info := range typeInfos {
 		func() {
 			currentInfo = info.TypeInfo
@@ -355,6 +397,87 @@ func TestANYScalarUDF(t *testing.T) {
 	row = db.QueryRow(`SELECT my_null_count() AS msg`)
 	require.NoError(t, row.Scan(&count))
 	require.Equal(t, 0, count)
+}
+
+func TestUnionScalarUDF(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
+
+	_, err := conn.ExecContext(context.Background(), `CREATE TYPE number_or_string AS UNION(number INTEGER, text VARCHAR)`)
+	require.NoError(t, err)
+
+	// Create member types.
+	intInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	varcharInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	// Create UNION type info.
+	unionInfo, err := NewUnionInfo(
+		[]TypeInfo{intInfo, varcharInfo},
+		[]string{"number", "text"},
+	)
+	require.NoError(t, err)
+
+	currentInfo = unionInfo
+
+	var udf *unionTestSUDF
+	err = RegisterScalarUDF(conn, "union_identity", udf)
+	require.NoError(t, err)
+
+	// Test with integer input.
+	var res any
+	row := db.QueryRow(`SELECT union_identity(42::number_or_string) AS res`)
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, Union{Value: int32(42), Tag: "number"}, res)
+
+	// Test with string input.
+	row = db.QueryRow(`SELECT union_identity('hello'::number_or_string) AS res`)
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, Union{Value: "hello", Tag: "text"}, res)
+
+	// Test with NULL input.
+	row = db.QueryRow(`SELECT union_identity(NULL::number_or_string) AS res`)
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, nil, res)
+}
+
+func TestGetConnIdScalarUDF(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	conn1 := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn1)
+	conn1Id, err := ConnId(conn1)
+	require.NoError(t, err)
+
+	currentInfo, err = NewTypeInfo(TYPE_UBIGINT)
+	require.NoError(t, err)
+
+	var udf *getConnIdUDF
+	err = RegisterScalarUDF(conn1, "get_conn_id", udf)
+	require.NoError(t, err)
+
+	conn2 := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn2)
+	conn2Id, err := ConnId(conn2)
+	require.NoError(t, err)
+
+	ctx := context.WithValue(context.Background(), testCtxKey, conn1Id)
+
+	var connId uint64
+	row := conn1.QueryRowContext(ctx, `SELECT get_conn_id() AS connId`)
+	require.NoError(t, row.Scan(&connId))
+	require.Equal(t, conn1Id, connId)
+
+	ctx = context.WithValue(context.Background(), testCtxKey, conn2Id)
+
+	row = conn2.QueryRowContext(ctx, `SELECT get_conn_id() AS connId`)
+	require.NoError(t, row.Scan(&connId))
+	require.Equal(t, conn2Id, connId)
 }
 
 func TestErrScalarUDF(t *testing.T) {

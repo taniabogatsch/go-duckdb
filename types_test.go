@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -53,8 +54,6 @@ type testTypesRow struct {
 	Struct_col       Composite[testTypesStruct]
 	Map_col          Map
 	Array_col        Composite[[3]int32]
-	Time_tz_col      time.Time
-	Timestamp_tz_col time.Time
 	Json_col_map     Composite[map[string]any]
 	Json_col_array   Composite[[]any]
 	Json_col_string  string
@@ -89,8 +88,6 @@ const testTypesTableSQL = `CREATE TABLE test (
 	Struct_col STRUCT(A INTEGER, B VARCHAR),
 	Map_col MAP(INTEGER, VARCHAR),
 	Array_col INTEGER[3],
-	Time_tz_col TIMETZ,
-	Timestamp_tz_col TIMESTAMPTZ,
 	Json_col_map JSON,
 	Json_col_array JSON,
 	Json_col_string JSON,
@@ -103,8 +100,6 @@ func (r *testTypesRow) toUTC() {
 	r.Timestamp_s_col = r.Timestamp_s_col.UTC()
 	r.Timestamp_ms_col = r.Timestamp_ms_col.UTC()
 	r.Timestamp_ns_col = r.Timestamp_ns_col.UTC()
-	r.Time_tz_col = r.Time_tz_col.UTC()
-	r.Timestamp_tz_col = r.Timestamp_tz_col.UTC()
 }
 
 func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
@@ -119,7 +114,6 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	// Get the DATE, TIME, and TIMETZ column values.
 	dateUTC := time.Date(1992, time.September, 20, 0, 0, 0, 0, time.UTC)
 	timeUTC := time.Date(1, time.January, 1, 11, 42, 7, 0, time.UTC)
-	timeTZ := time.Date(1, time.January, 1, 11, 42, 7, 0, IST)
 
 	var buffer bytes.Buffer
 	for j := 0; j < i; j++ {
@@ -176,8 +170,6 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 		structCol,
 		mapCol,
 		arrayCol,
-		timeTZ,
-		ts,
 		jsonMapCol,
 		jsonArrayCol,
 		varcharCol,
@@ -231,8 +223,6 @@ func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []
 			r.Struct_col.Get(),
 			r.Map_col,
 			r.Array_col.Get(),
-			r.Time_tz_col,
-			r.Timestamp_tz_col,
 			r.Json_col_map.Get(),
 			r.Json_col_array.Get(),
 			r.Json_col_string,
@@ -277,8 +267,6 @@ func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []
 			&r.Struct_col,
 			&r.Map_col,
 			&r.Array_col,
-			&r.Time_tz_col,
-			&r.Timestamp_tz_col,
 			&r.Json_col_map,
 			&r.Json_col_array,
 			&r.Json_col_string,
@@ -440,6 +428,8 @@ func TestDecimal(t *testing.T) {
 			var fs Decimal
 			require.NoError(t, r.Scan(&fs))
 			require.Equal(t, test.want, fs.String())
+			// confirms Decimal implements fmt.Stringer correctly (see #424)
+			require.Equal(t, test.want, fmt.Sprint(fs))
 		}
 	})
 }
@@ -796,23 +786,42 @@ func TestTimestampTZ(t *testing.T) {
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
-	_, err := db.Exec("CREATE TABLE IF NOT EXISTS tbl (tz TIMESTAMPTZ)")
-	require.NoError(t, err)
-
-	IST, err := time.LoadLocation("Asia/Kolkata")
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS tbl (tz TIMESTAMPTZ)`)
 	require.NoError(t, err)
 
 	const longForm = "2006-01-02 15:04:05 MST"
-	ts, err := time.ParseInLocation(longForm, "2016-01-17 20:04:05 IST", IST)
+
+	// Test a location east of GMT.
+	loc, err := time.LoadLocation("Asia/Kolkata")
 	require.NoError(t, err)
 
-	_, err = db.Exec("INSERT INTO tbl (tz) VALUES(?)", ts)
+	ts, err := time.ParseInLocation(longForm, "2016-01-17 20:04:05 IST", loc)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO tbl (tz) VALUES(?)`, ts)
 	require.NoError(t, err)
 
 	var tz time.Time
-	err = db.QueryRow("SELECT tz FROM tbl").Scan(&tz)
+	err = db.QueryRow(`SELECT tz FROM tbl`).Scan(&tz)
 	require.NoError(t, err)
-	require.Equal(t, ts.UTC(), tz)
+	require.Equal(t, ts.UTC(), tz.UTC())
+
+	// Reset and test a location west of GMT.
+	_, err = db.Exec(`DELETE FROM tbl`)
+	require.NoError(t, err)
+
+	loc, err = time.LoadLocation("America/Los_Angeles")
+	require.NoError(t, err)
+
+	ts, err = time.ParseInLocation(longForm, "2016-01-17 10:04:05 PDT", loc)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO tbl (tz) VALUES(?)`, ts)
+	require.NoError(t, err)
+
+	err = db.QueryRow(`SELECT tz FROM tbl`).Scan(&tz)
+	require.NoError(t, err)
+	require.Equal(t, ts.UTC(), tz.UTC())
 }
 
 func TestBoolean(t *testing.T) {
@@ -942,4 +951,110 @@ func TestJSONType(t *testing.T) {
 	require.Equal(t, float64(1), res.Get()["1"])
 	require.Equal(t, float64(2), res.Get()["2"])
 	require.Equal(t, float64(3), res.Get()["3"])
+}
+
+func TestJSONColType(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE OR REPLACE TABLE test AS SELECT '[10]'::JSON AS col, 1 AS val`)
+	require.NoError(t, err)
+
+	res, err := db.QueryContext(context.Background(), `SELECT col AS value, count(*) AS count FROM test GROUP BY 1`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
+
+	columnTypes, err := res.ColumnTypes()
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(columnTypes))
+	require.Equal(t, aliasJSON, columnTypes[0].DatabaseTypeName())
+	require.Equal(t, typeToStringMap[TYPE_BIGINT], columnTypes[1].DatabaseTypeName())
+	require.Equal(t, reflect.TypeOf((*any)(nil)).Elem(), columnTypes[0].ScanType())
+	require.Equal(t, reflect.TypeOf(int64(0)), columnTypes[1].ScanType())
+}
+
+func TestUnionTypes(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	// Test basic UNION type creation and scanning.
+	t.Run("basic UNION operations", func(t *testing.T) {
+		r, err := db.Query(`
+            SELECT
+                (123)::UNION(num INTEGER, str VARCHAR) AS int_union,
+                ('hello')::UNION(num INTEGER, str VARCHAR) AS str_union,
+                NULL::UNION(num INTEGER, str VARCHAR) AS null_union
+        `)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
+
+		require.True(t, r.Next())
+		var intUnion, strUnion Union
+		var nullUnion any
+		err = r.Scan(&intUnion, &strUnion, &nullUnion)
+		require.NoError(t, err)
+
+		require.Equal(t, "num", intUnion.Tag)
+		require.Equal(t, int32(123), intUnion.Value)
+
+		require.Equal(t, "str", strUnion.Tag)
+		require.Equal(t, "hello", strUnion.Value)
+
+		require.Nil(t, nullUnion)
+	})
+
+	// Test UNION with different types.
+	t.Run("UNION with different types", func(t *testing.T) {
+		r, err := db.Query(`
+            WITH unions AS (
+                SELECT
+                    (1.5)::UNION(d DOUBLE, i INTEGER) AS double_union,
+                    ('2024-01-01'::DATE)::UNION(d DATE, s VARCHAR) AS date_union
+            )
+            SELECT * FROM unions
+        `)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
+
+		require.True(t, r.Next())
+		var doubleUnion, dateUnion Union
+		err = r.Scan(&doubleUnion, &dateUnion)
+		require.NoError(t, err)
+
+		require.Equal(t, "d", doubleUnion.Tag)
+		require.Equal(t, float64(1.5), doubleUnion.Value)
+
+		require.Equal(t, "d", dateUnion.Tag)
+		require.Equal(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), dateUnion.Value)
+	})
+
+	// Test column type information.
+	t.Run("UNION column type info", func(t *testing.T) {
+		r, err := db.Query(`
+            SELECT (123)::UNION(num INTEGER, str VARCHAR) AS union_col
+        `)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
+
+		types, err := r.ColumnTypes()
+		require.NoError(t, err)
+		require.Equal(t, "UNION(num INTEGER, str VARCHAR)", types[0].DatabaseTypeName())
+	})
+
+	// Test multiple UNION members.
+	t.Run("UNION with multiple members", func(t *testing.T) {
+		r, err := db.Query(`
+            SELECT (123)::UNION(a INTEGER, b VARCHAR, c DOUBLE) AS multi_union
+        `)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
+
+		require.True(t, r.Next())
+		var val Union
+		err = r.Scan(&val)
+		require.NoError(t, err)
+		require.Equal(t, "a", val.Tag)
+		require.Equal(t, int32(123), val.Value)
+	})
 }

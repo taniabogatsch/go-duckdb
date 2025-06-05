@@ -76,6 +76,24 @@ type (
 		n     int64
 		count int64
 	}
+
+	unionTableUDF struct {
+		n     int64
+		count int64
+	}
+
+	// Parallel chunk-based table UDF tests.
+
+	parallelChunkIncTableUDF struct {
+		lock    *sync.Mutex
+		claimed int64
+		n       int64
+	}
+
+	parallelChunkIncTableLocalState struct {
+		start int64
+		end   int64
+	}
 )
 
 var (
@@ -218,6 +236,30 @@ var (
 			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMPTZ))`,
 			resultCount: 1,
 		},
+		{
+			udf:         &unionTableUDF{},
+			name:        "unionTableUDF",
+			query:       `SELECT * FROM %s(4)`,
+			resultCount: 4,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 0, time.UTC), t: TYPE_TIMESTAMP_S},
+			name:        "constTableUDF_timestamp_s",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123000000, time.UTC), t: TYPE_TIMESTAMP_MS},
+			name:        "constTableUDF_timestamp_ms",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123456789, time.UTC), t: TYPE_TIMESTAMP_NS},
+			name:        "constTableUDF_timestamp_ns",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))`,
+			resultCount: 1,
+		},
 	}
 	parallelTableUDFs = []tableUDFTest[ParallelRowTableFunction]{
 		{
@@ -235,24 +277,12 @@ var (
 			resultCount: 2048,
 		},
 	}
-	unsupportedTypeUDFs = []tableUDFTest[RowTableFunction]{
+	parallelChunkTableUDFs = []tableUDFTest[ParallelChunkTableFunction]{
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 0, time.UTC), t: TYPE_TIMESTAMP_S},
-			name:        "constTableUDF_timestamp_s",
-			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))`,
-			resultCount: 1,
-		},
-		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123000000, time.UTC), t: TYPE_TIMESTAMP_MS},
-			name:        "constTableUDF_timestamp_ms",
-			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))`,
-			resultCount: 1,
-		},
-		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_NS},
-			name:        "constTableUDF_timestamp_ns",
-			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))`,
-			resultCount: 1,
+			udf:         &parallelChunkIncTableUDF{},
+			name:        "parallelChunkIncTableUDF",
+			query:       `SELECT * FROM %s(2048) ORDER BY result`,
+			resultCount: 2048,
 		},
 	}
 )
@@ -351,8 +381,8 @@ func (udf *parallelIncTableUDF) FillRow(localState any, row Row) (bool, error) {
 		}
 
 		state.start = udf.claimed
+		state.end = udf.claimed + remaining
 		udf.claimed += remaining
-		state.end = udf.claimed
 		udf.lock.Unlock()
 	}
 
@@ -379,6 +409,79 @@ func (udf *parallelIncTableUDF) GetFunction() ParallelRowTableFunction {
 			Arguments: []TypeInfo{typeBigintTableUDF},
 		},
 		BindArguments: bindParallelIncTableUDF,
+	}
+}
+
+func bindParallelChunkIncTableUDF(namedArgs map[string]any, args ...interface{}) (ParallelChunkTableSource, error) {
+	return &parallelChunkIncTableUDF{
+		lock:    &sync.Mutex{},
+		claimed: 0,
+		n:       args[0].(int64),
+	}, nil
+}
+
+func (udf *parallelChunkIncTableUDF) ColumnInfos() []ColumnInfo {
+	return []ColumnInfo{{Name: "result", T: typeBigintTableUDF}}
+}
+
+func (udf *parallelChunkIncTableUDF) Init() ParallelTableSourceInfo {
+	return ParallelTableSourceInfo{MaxThreads: 8}
+}
+
+func (udf *parallelChunkIncTableUDF) NewLocalState() any {
+	return &parallelChunkIncTableLocalState{
+		start: 0,
+		end:   -1,
+	}
+}
+
+func (udf *parallelChunkIncTableUDF) FillChunk(localState any, chunk DataChunk) error {
+	state := localState.(*parallelChunkIncTableLocalState)
+
+	// Claim a new work unit.
+	udf.lock.Lock()
+	remaining := udf.n - udf.claimed
+	if remaining <= 0 {
+		// No more work.
+		udf.lock.Unlock()
+		return nil
+	} else if remaining >= 2048 {
+		remaining = 2048
+	}
+	state.start = udf.claimed
+	state.end = udf.claimed + remaining
+	udf.claimed += remaining
+	udf.lock.Unlock()
+
+	for i := 0; i < int(remaining); i++ {
+		err := chunk.SetValue(0, i, int64(i)+state.start+1)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := chunk.SetSize(int(remaining))
+	return err
+}
+
+func (udf *parallelChunkIncTableUDF) GetValue(r, c int) any {
+	return int64(r + 1)
+}
+
+func (udf *parallelChunkIncTableUDF) GetTypes() []any {
+	return []any{0}
+}
+
+func (udf *parallelChunkIncTableUDF) Cardinality() *CardinalityInfo {
+	return nil
+}
+
+func (udf *parallelChunkIncTableUDF) GetFunction() ParallelChunkTableFunction {
+	return ParallelChunkTableFunction{
+		Config: TableFunctionConfig{
+			Arguments: []TypeInfo{typeBigintTableUDF}, // 参数类型为BIGINT
+		},
+		BindArguments: bindParallelChunkIncTableUDF, // 绑定参数函数
 	}
 }
 
@@ -631,6 +734,85 @@ func (udf *chunkIncTableUDF) Cardinality() *CardinalityInfo {
 	return nil
 }
 
+func (udf *unionTableUDF) GetFunction() RowTableFunction {
+	return RowTableFunction{
+		Config: TableFunctionConfig{
+			Arguments: []TypeInfo{typeBigintTableUDF},
+		},
+		BindArguments: bindUnionTableUDF,
+	}
+}
+
+func bindUnionTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+	return &unionTableUDF{
+		count: 0,
+		n:     args[0].(int64),
+	}, nil
+}
+
+func (udf *unionTableUDF) ColumnInfos() []ColumnInfo {
+	// Create member types.
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	varcharInfo, _ := NewTypeInfo(TYPE_VARCHAR)
+
+	// Create UNION type info.
+	unionInfo, _ := NewUnionInfo(
+		[]TypeInfo{intInfo, varcharInfo},
+		[]string{"number", "text"},
+	)
+
+	return []ColumnInfo{{Name: "result", T: unionInfo}}
+}
+
+func (udf *unionTableUDF) Init() {}
+
+func (udf *unionTableUDF) FillRow(row Row) (bool, error) {
+	if udf.count >= udf.n {
+		return false, nil
+	}
+	udf.count++
+
+	var val Union
+	if udf.count%2 == 0 {
+		// Even numbers: store as number.
+		val = Union{
+			Value: int32(udf.count),
+			Tag:   "number",
+		}
+	} else {
+		// Odd numbers: store as text.
+		val = Union{
+			Value: fmt.Sprintf("text_%d", udf.count),
+			Tag:   "text",
+		}
+	}
+
+	err := SetRowValue(row, 0, val)
+	return true, err
+}
+
+func (udf *unionTableUDF) GetValue(r, c int) any {
+	count := int64(r + 1)
+	if count%2 == 0 {
+		return Union{
+			Value: int32(count),
+			Tag:   "number",
+		}
+	}
+	return Union{
+		Value: fmt.Sprintf("text_%d", count),
+		Tag:   "text",
+	}
+}
+
+func (udf *unionTableUDF) GetTypes() []any {
+	return []any{Union{}}
+}
+
+func (udf *unionTableUDF) Cardinality() *CardinalityInfo {
+	return nil
+}
+
 func TestTableUDF(t *testing.T) {
 	for _, udf := range rowTableUDFs {
 		t.Run(udf.name, func(t *testing.T) {
@@ -645,6 +827,12 @@ func TestTableUDF(t *testing.T) {
 	}
 
 	for _, udf := range chunkTableUDFs {
+		t.Run(udf.name, func(t *testing.T) {
+			singleTableUDF(t, udf)
+		})
+	}
+
+	for _, udf := range parallelChunkTableUDFs {
 		t.Run(udf.name, func(t *testing.T) {
 			singleTableUDF(t, udf)
 		})
@@ -696,25 +884,6 @@ func TestErrTableUDF(t *testing.T) {
 	testError(t, err, errAPI.Error(), errTableUDFCreate.Error(), errTableUDFNoName.Error())
 
 	// FIXME: add more error tests.
-}
-
-func TestErrTableUDFUnsupportedType(t *testing.T) {
-	for _, udf := range unsupportedTypeUDFs {
-		t.Run(udf.name, func(t *testing.T) {
-			db := openDbWrapper(t, `?access_mode=READ_WRITE`)
-			conn := openConnWrapper(t, db, context.Background())
-
-			err := RegisterTableUDF(conn, udf.name, udf.udf.GetFunction())
-			require.NoError(t, err)
-
-			res, err := db.QueryContext(context.Background(), fmt.Sprintf(udf.query, udf.name))
-			require.Contains(t, err.Error(), unsupportedTypeErrMsg)
-
-			closeRowsWrapper(t, res)
-			closeConnWrapper(t, conn)
-			closeDbWrapper(t, db)
-		})
-	}
 }
 
 func TestTableUDFAggregate(t *testing.T) {
