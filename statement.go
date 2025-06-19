@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/taniabogatsch/go-duckdb/mapping"
 )
@@ -169,12 +168,18 @@ func (s *Stmt) bindHugeint(val *big.Int, n int) (mapping.State, error) {
 func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.State, error) {
 	var state mapping.State
 	switch t {
-	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP:
 		v, err := getMappedTimestamp(t, val.Value)
 		if err != nil {
 			return mapping.StateError, err
 		}
 		state = mapping.BindTimestamp(*s.preparedStmt, mapping.IdxT(n+1), *v)
+	case TYPE_TIMESTAMP_TZ:
+		v, err := getMappedTimestamp(t, val.Value)
+		if err != nil {
+			return mapping.StateError, err
+		}
+		state = mapping.BindTimestampTZ(*s.preparedStmt, mapping.IdxT(n+1), *v)
 	case TYPE_TIMESTAMP_S:
 		v, err := getMappedTimestampS(val.Value)
 		if err != nil {
@@ -242,6 +247,13 @@ func (s *Stmt) bindJSON(val driver.NamedValue, n int) (mapping.State, error) {
 	return mapping.StateError, addIndexToError(unsupportedTypeError("JSON interface, need []byte or string"), n+1)
 }
 
+func (s *Stmt) bindUUID(val driver.NamedValue, n int) (mapping.State, error) {
+	if ss, ok := val.Value.(fmt.Stringer); ok {
+		return mapping.BindVarchar(*s.preparedStmt, mapping.IdxT(n+1), ss.String()), nil
+	}
+	return mapping.StateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
+}
+
 // Used for binding Array, List, Struct. In the future, also Map and Union
 func (s *Stmt) bindCompositeValue(val driver.NamedValue, n int) (mapping.State, error) {
 	lt, err := s.paramLogicalType(n + 1)
@@ -251,33 +263,36 @@ func (s *Stmt) bindCompositeValue(val driver.NamedValue, n int) (mapping.State, 
 	}
 
 	mappedVal, err := createValue(lt, val.Value)
-	defer mapping.DestroyValue(mappedVal)
+	defer mapping.DestroyValue(&mappedVal)
 	if err != nil {
 		return mapping.StateError, addIndexToError(err, n+1)
 	}
 
-	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *mappedVal)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), mappedVal)
 	return state, nil
 }
 
-func (s *Stmt) tryBindComplexValue(val driver.NamedValue, t Type, n int) (mapping.State, error) {
-	switch val.Value.(type) {
-	case time.Time:
-		// Fallback to TIMESTAMP, if we cannot know the exact type.
-		return s.bindTimestamp(val, TYPE_TIMESTAMP, n)
+func (s *Stmt) tryBindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
+	lt, mappedVal, err := createValueByReflection(val.Value)
+	defer mapping.DestroyLogicalType(&lt)
+	defer mapping.DestroyValue(&mappedVal)
+	if err != nil {
+		return mapping.StateError, addIndexToError(err, n+1)
 	}
-	name := typeToStringMap[t]
-	return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), mappedVal)
+	return state, nil
 }
 
 func (s *Stmt) bindComplexValue(val driver.NamedValue, n int, t Type, name string) (mapping.State, error) {
 	// We could not resolve this parameter when binding the query.
 	// Fall back to the Go type.
 	if t == TYPE_INVALID {
-		return s.tryBindComplexValue(val, t, n)
+		return s.tryBindComplexValue(val, n)
 	}
 
 	switch t {
+	case TYPE_UUID:
+		return s.bindUUID(val, n)
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS:
 		return s.bindTimestamp(val, t, n)
 	case TYPE_DATE:

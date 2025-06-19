@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"math/big"
+	"reflect"
 
 	"github.com/taniabogatsch/go-duckdb/mapping"
 )
@@ -38,8 +39,14 @@ func newConn(conn mapping.Connection, ctxStore *contextStore) *Conn {
 // CheckNamedValue implements the driver.NamedValueChecker interface.
 func (conn *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch nv.Value.(type) {
-	case *big.Int, Interval, []any, []bool, []int8, []int16, []int32, []int64, []uint8, []uint16,
-		[]uint32, []uint64, []float32, []float64, []string, map[string]any:
+	case *big.Int, Interval, []any, []bool, []int8, []int16, []int32, []int64, []int, []uint8, []uint16,
+		[]uint32, []uint64, []uint, []float32, []float64, []string, map[string]any:
+		return nil
+	}
+
+	vo := reflect.ValueOf(nv.Value)
+	switch vo.Kind() {
+	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Array:
 		return nil
 	}
 	return driver.ErrSkip
