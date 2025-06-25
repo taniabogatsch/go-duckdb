@@ -6,8 +6,8 @@ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOf
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/taniabogatsch/duckdb-go-bindings v0.0.6 h1:M+Pbt+5LciX/Jd52MW7yZJStvo0ozKkhiWFSaJ6klnU=
 github.com/taniabogatsch/duckdb-go-bindings v0.0.6/go.mod h1:aoF4QwJi6/4Rs1tmB6Qr3dRFeH2bFOwuFp1GDQEZaEM=
-github.com/taniabogatsch/duckdb-go-bindings/custom-duckdb-linux-amd64 v0.0.6 h1:r6D28DYdhermzs16EAMAh1JdIp6PJzqZXmLaz3jERv0=
-github.com/taniabogatsch/duckdb-go-bindings/custom-duckdb-linux-amd64 v0.0.6/go.mod h1:AUQhz50XkmO+siiLW6UzuUyTcllAxMetYQTdNhmqTgM=
+github.com/taniabogatsch/duckdb-go-bindings/custom-duckdb-linux-amd64 v0.0.7 h1:hk4aa2dqX0D7WDYNbe8+0fBiq9ZxW49qqjqK4HXtDtU=
+github.com/taniabogatsch/duckdb-go-bindings/custom-duckdb-linux-amd64 v0.0.7/go.mod h1:AUQhz50XkmO+siiLW6UzuUyTcllAxMetYQTdNhmqTgM=
 github.com/taniabogatsch/duckdb-go-bindings/darwin-amd64 v0.0.5 h1:jpjL5Yz7lhbtEedgcj4ClONYeUpmplfy12c6gYQrHkM=
 github.com/taniabogatsch/duckdb-go-bindings/darwin-amd64 v0.0.5/go.mod h1:MB4dZYhfY1+3y9hn62bJJLRfvFbTr9qHXcf8CtRfmRc=
 github.com/taniabogatsch/duckdb-go-bindings/darwin-arm64 v0.0.5 h1:u5b0xg+C4X39+nXJG0WL2FLC3o8PhBXsNqAiHzues+Y=
