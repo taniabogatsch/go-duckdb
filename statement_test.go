@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -650,4 +651,144 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	err = nestedEmptySlicePrepare.QueryRow([][]string{}).Scan(&nestedEmptySliceRes)
 	require.NoError(t, err)
 	require.Equal(t, [][]any{}, nestedEmptySliceRes.Get())
+}
+
+func TestBindUUID(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	// Create table with nullable UUID column
+	_, err := db.Exec(`CREATE TABLE uuid_test (id INTEGER, uuid_col UUID)`)
+	require.NoError(t, err)
+
+	// Test 1: Insert a NULL UUID using (*uuid.UUID)(nil)
+	_, err = db.Exec(`INSERT INTO uuid_test VALUES (?, ?)`, 1, (*uuid.UUID)(nil))
+	require.NoError(t, err)
+
+	// Test 2: Insert a NULL UUID using nil
+	_, err = db.Exec(`INSERT INTO uuid_test VALUES (?, ?)`, 2, nil)
+	require.NoError(t, err)
+
+	// Test 3: Insert a valid UUID ptr, to test complex value binding
+	u3 := uuid.New()
+	testUUID := UUID(u3)
+	_, err = db.Exec(`INSERT INTO uuid_test VALUES (?, ?)`, 3, &testUUID)
+	require.NoError(t, err)
+
+	// Test 4: Insert a uuid.UUID pointer containing a value, to test Stringer interface
+	u4 := uuid.New()
+	ptrToUUID := &u4
+	_, err = db.Exec(`INSERT INTO uuid_test VALUES (?, ?)`, 4, ptrToUUID)
+	require.NoError(t, err)
+
+	// Verify results by scanning back
+	r, err := db.Query(`SELECT id, uuid_col FROM uuid_test ORDER BY id`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, r)
+
+	expectedResults := []struct {
+		id   int
+		uuid *uuid.UUID
+	}{
+		{1, nil},
+		{2, nil},
+		{3, &u3},
+		{4, &u4},
+	}
+
+	resultIndex := 0
+	for r.Next() {
+		var id int
+		var retrievedUUID *uuid.UUID
+		err = r.Scan(&id, &retrievedUUID)
+		require.NoError(t, err)
+
+		expected := expectedResults[resultIndex]
+		require.Equal(t, expected.id, id, "incorrect id")
+
+		if expected.uuid == nil {
+			require.Nil(t, retrievedUUID)
+		} else {
+			require.NotNil(t, retrievedUUID)
+			require.Equal(t, *expected.uuid, *retrievedUUID)
+		}
+		resultIndex++
+	}
+	require.Equal(t, 4, resultIndex, "incorrect count of results")
+
+	// Verify NULL count
+	var nullCount int
+	err = db.QueryRow(`SELECT COUNT(*) FROM uuid_test WHERE uuid_col IS NULL`).Scan(&nullCount)
+	require.NoError(t, err)
+	require.Equal(t, 2, nullCount, "incorrect count of NULLs")
+}
+
+// Define a custom type that shadows the string type
+type String256 string
+
+// Test that a custom type pointer is handled correctly by the DefaultParameterConverter
+func TestInsertCustomTypePtr(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	// Create a table with a VARCHAR column
+	createTable(t, db, `CREATE TABLE test_custom_type_ptr(id INTEGER, name VARCHAR)`)
+
+	// Create a value of our custom type
+	expected := String256("test string")
+
+	// Insert the custom type pointer into the VARCHAR column
+	// Ensures that the custom type is handled by the DefaultParameterConverter
+	_, err := db.Exec(`INSERT INTO test_custom_type_ptr VALUES (?, ?)`, 1, &expected)
+	require.NoError(t, err)
+
+	// Query the inserted value back
+	var id int
+	var actual String256
+	err = db.QueryRow(`SELECT id, name FROM test_custom_type_ptr WHERE id = ?`, 1).Scan(&id, &actual)
+	require.NoError(t, err)
+
+	// Verify the values
+	require.Equal(t, 1, id, "incorrect id")
+	require.Equal(t, expected, actual, "incorrect value")
+}
+
+func TestBindNullableValue(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	// Create a table with a nullable BIGINT/VARCHAR column
+	createTable(t, db, `CREATE TABLE nullable_int_test(id BIGINT, name VARCHAR)`)
+
+	// Test inserting a NULL value
+	var nullID *int64
+	var nullName *string
+	_, err := db.Exec(`INSERT INTO nullable_int_test (id, name) VALUES (?, ?) RETURNING id, name`, nil, nil)
+	require.NoError(t, err)
+
+	// Query the inserted value back
+	err = db.QueryRow(`SELECT id, name FROM nullable_int_test WHERE id IS NULL`).Scan(&nullID, &nullName)
+	require.NoError(t, err)
+
+	// Verify the values
+	require.Nil(t, nullID, "expected id to be nil")
+	require.Nil(t, nullName, "expected name to be nil")
+
+	// Test inserting value pointer
+	id := int64(42)
+	name := "test name"
+	var nonNullID *int64
+	var nonNullName *string
+	_, err = db.Exec(`INSERT INTO nullable_int_test (id, name) VALUES (?, ?) RETURNING id, name`, &id, &name)
+	require.NoError(t, err)
+
+	// Query the inserted value back
+	err = db.QueryRow(`SELECT id, name FROM nullable_int_test WHERE id = ?`, id).Scan(&nonNullID, &nonNullName)
+	require.NoError(t, err)
+
+	// Verify the values
+	require.NotNil(t, nonNullID, "expected id to not be nil")
+	require.Equal(t, id, *nonNullID, "incorrect id value")
+	require.NotNil(t, nonNullName, "expected name to not be nil")
+	require.Equal(t, name, *nonNullName, "incorrect name value")
 }
