@@ -3,7 +3,7 @@
 package mapping
 
 import (
-	bindings "github.com/taniabogatsch/duckdb-go-bindings/custom-duckdb-linux-amd64"
+	bindings "github.com/taniabogatsch/duckdb-go-bindings/linux-amd64"
 )
 
 // Enums.
