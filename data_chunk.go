@@ -70,9 +70,10 @@ func SetChunkValue[T any](chunk DataChunk, colIdx int, rowIdx int, val T) error 
 	return setVectorVal(&chunk.columns[colIdx], mapping.IdxT(rowIdx), val)
 }
 
-func (chunk *DataChunk) initFromTypes(types []mapping.LogicalType, writable bool) error {
+func (chunk *DataChunk) initFromTypes(types []mapping.LogicalType, writable bool, logFn func(map[string]any)) error {
 	// NOTE: initFromTypes does not initialize the column names.
 	columnCount := len(types)
+	chunk.chunk = mapping.CreateDataChunk(types, logFn)
 
 	// Initialize the callback functions to read and write values.
 	chunk.columns = make([]vector, columnCount)
@@ -83,12 +84,11 @@ func (chunk *DataChunk) initFromTypes(types []mapping.LogicalType, writable bool
 		}
 	}
 	if err != nil {
+		mapping.DestroyDataChunk(&chunk.chunk)
 		return err
 	}
 
-	chunk.chunk = mapping.CreateDataChunk(types)
 	chunk.initVectors(writable)
-
 	return nil
 }
 

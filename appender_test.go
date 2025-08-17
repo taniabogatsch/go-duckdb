@@ -750,6 +750,32 @@ func TestAppenderDecimal(t *testing.T) {
 	require.Equal(t, 3, i)
 }
 
+func TestAppenderMetadataTable(t *testing.T) {
+	c := newConnectorWrapper(t, ``, nil)
+
+	db := sql.OpenDB(c)
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS test (
+		    kind VARCHAR PRIMARY KEY, 
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, data VARCHAR)`)
+	require.NoError(t, err)
+
+	conn := openDriverConnWrapper(t, c)
+
+	logFn := func(m map[string]any) {
+		for k, v := range m {
+			fmt.Println(fmt.Sprintf("%v:%v", k, v))
+		}
+	}
+
+	a, err := NewAppenderWithLogger(conn, "", "", "test", logFn)
+	require.NoError(t, err)
+	defer cleanupAppender(t, c, db, conn, a)
+
+	require.NoError(t, a.AppendRow("hello", time.Now(), "helloooo"))
+	require.NoError(t, a.Flush())
+}
+
 func TestAppenderStrings(t *testing.T) {
 	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (str VARCHAR)`)
