@@ -764,7 +764,7 @@ func TestAppenderMetadataTable(t *testing.T) {
 
 	logFn := func(m map[string]any) {
 		for k, v := range m {
-			fmt.Println(fmt.Sprintf("%v:%v", k, v))
+			fmt.Printf("%v:%v\n", k, v)
 		}
 	}
 
