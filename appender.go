@@ -4,8 +4,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"github.com/taniabogatsch/go-duckdb/mapping"
-	"strconv"
-	"unsafe"
 )
 
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
@@ -34,7 +32,7 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 	return NewAppenderWithLogger(driverConn, catalog, schema, table, nil)
 }
 
-// NewAppender returns a new Appender from a DuckDB driver connection.
+// NewAppenderWithLogger returns a new Appender from a DuckDB driver connection.
 func NewAppenderWithLogger(driverConn driver.Conn, catalog, schema, table string, logFn func(map[string]any)) (*Appender, error) {
 	conn, ok := driverConn.(*Conn)
 	if !ok {
@@ -62,24 +60,8 @@ func NewAppenderWithLogger(driverConn driver.Conn, catalog, schema, table string
 
 	// Get the column types.
 	columnCount := mapping.AppenderColumnCount(appender)
-	logs := map[string]any{
-		"column_count": columnCount,
-	}
-
-	var ptr unsafe.Pointer
 	for i := mapping.IdxT(0); i < columnCount; i++ {
 		colType := mapping.AppenderColumnType(appender, i)
-
-		msg := ""
-		if colType.Ptr == nil {
-			msg = "col type ptr is nil"
-		} else if colType.Ptr == ptr {
-			msg = "col type ptr is uninitialized ptr"
-		} else {
-			msg = logicalTypeName(colType)
-		}
-		logs["col_type_"+strconv.Itoa(int(i))] = msg
-
 		a.types = append(a.types, colType)
 
 		// Ensure that we only create an appender for supported column types.
@@ -94,10 +76,7 @@ func NewAppenderWithLogger(driverConn driver.Conn, catalog, schema, table string
 	}
 
 	// Initialize the data chunk.
-	if logFn != nil {
-		logFn(logs)
-	}
-	if err := a.chunk.initFromTypes(a.types, true, logFn); err != nil {
+	if err := a.chunk.initFromTypes(a.types, true); err != nil {
 		a.chunk.close()
 		destroyTypeSlice(a.types)
 		mapping.AppenderDestroy(&appender)
