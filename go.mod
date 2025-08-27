@@ -7,8 +7,8 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.3.0
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
-	github.com/taniabogatsch/go-duckdb/arrowmapping v0.1.5
-	github.com/taniabogatsch/go-duckdb/mapping v0.1.5
+	github.com/taniabogatsch/go-duckdb/arrowmapping v0.1.6
+	github.com/taniabogatsch/go-duckdb/mapping v0.1.6
 )
 
 require (
@@ -20,12 +20,12 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings v0.1.5 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/darwin-amd64 v0.1.5 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/darwin-arm64 v0.1.5 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/linux-amd64 v0.1.5 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/linux-arm64 v0.1.5 // indirect
-	github.com/taniabogatsch/duckdb-go-bindings/windows-amd64 v0.1.5 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings v0.1.6 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/darwin-amd64 v0.1.6 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/darwin-arm64 v0.1.6 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/linux-amd64 v0.1.6 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/linux-arm64 v0.1.6 // indirect
+	github.com/taniabogatsch/duckdb-go-bindings/windows-amd64 v0.1.6 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/mod v0.25.0 // indirect
