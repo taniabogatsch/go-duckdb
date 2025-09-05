@@ -49,7 +49,7 @@ func TestLogging(t *testing.T) {
 	r = conn.QueryRowContext(ctx, `SELECT COUNT(*) = 0 FROM duckdb_logs`)
 	require.NoError(t, err)
 	require.NoError(t, r.Scan(&empty))
-	require.Equal(t, false, empty)
+	require.False(t, empty)
 
 	// Clear logs.
 	_, err = conn.ExecContext(ctx, `PRAGMA truncate_duckdb_logs`)
