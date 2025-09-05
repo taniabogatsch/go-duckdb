@@ -26,7 +26,7 @@ import (
 	"runtime/cgo"
 	"unsafe"
 
-	"github.com/marcboeker/go-duckdb/mapping"
+	"github.com/taniabogatsch/go-duckdb/mapping"
 )
 
 type (

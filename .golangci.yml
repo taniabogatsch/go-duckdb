@@ -60,9 +60,9 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/marcboeker/go-duckdb)
+        - prefix(github.com/taniabogatsch/go-duckdb)
     gofumpt:
       extra-rules: true
     goimports:
       local-prefixes:
-        - github.com/marcboeker/go-duckdb
+        - github.com/taniabogatsch/go-duckdb
