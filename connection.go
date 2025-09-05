@@ -24,6 +24,8 @@ type Conn struct {
 	closed bool
 	// True, if the connection has an open transaction.
 	tx bool
+	// The metrics of the last query of the connection.
+	m metrics
 }
 
 func newConn(conn mapping.Connection, ctxStore *contextStore) *Conn {

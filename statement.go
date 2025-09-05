@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"time"
 
 	"github.com/taniabogatsch/go-duckdb/mapping"
 )
@@ -537,13 +538,19 @@ func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*mapping.
 	if s.rows {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
 	}
+
+	startBind := time.Now()
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
+	s.conn.m.bind = time.Since(startBind)
+
 	return s.executeBound(ctx)
 }
 
 func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
+	startPrepare := time.Now()
+
 	var pendingRes mapping.PendingResult
 	if mapping.PendingPrepared(*s.preparedStmt, &pendingRes) == mapping.StateError {
 		dbErr := getDuckDBError(mapping.PendingError(pendingRes))
@@ -551,7 +558,9 @@ func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
 		return nil, dbErr
 	}
 	defer mapping.DestroyPending(&pendingRes)
+	s.conn.m.prepare = time.Since(startPrepare)
 
+	startExec := time.Now()
 	mainDoneCh := make(chan struct{})
 	bgDoneCh := make(chan struct{})
 
@@ -570,8 +579,10 @@ func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
 		close(bgDoneCh)
 	}()
 
+	startExecPending := time.Now()
 	var res mapping.Result
 	state := mapping.ExecutePending(pendingRes, &res)
+	s.conn.m.execPending = time.Since(startExecPending)
 
 	// We finished executing the pending query.
 	// Close the main channel.
@@ -594,6 +605,7 @@ func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
 		return nil, err
 	}
 
+	s.conn.m.exec = time.Since(startExec)
 	return &res, nil
 }
 
