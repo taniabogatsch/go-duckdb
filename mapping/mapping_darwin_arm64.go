@@ -3,7 +3,7 @@
 package mapping
 
 import (
-	bindings "github.com/duckdb/duckdb-go-bindings/darwin-arm64"
+	bindings "github.com/taniabogatsch/duckdb-go-bindings/darwin-arm64"
 )
 
 // Enums.
