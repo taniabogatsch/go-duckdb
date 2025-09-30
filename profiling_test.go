@@ -111,7 +111,7 @@ func TestProfiling(t *testing.T) {
 	_, err = conn.ExecContext(context.Background(), `PRAGMA disable_profiling`)
 	require.NoError(t, err)
 
-	info, err = GetProfilingInfo(conn)
+	_, err = GetProfilingInfo(conn)
 	require.ErrorContains(t, err, errProfilingInfoEmpty.Error())
 }
 
