@@ -52,7 +52,7 @@ func TestLogging(t *testing.T) {
 	require.False(t, empty)
 
 	// Clear logs.
-	_, err = conn.ExecContext(ctx, `PRAGMA truncate_duckdb_logs`)
+	_, err = conn.ExecContext(ctx, `CALL truncate_duckdb_logs()`)
 	require.NoError(t, err)
 }
 
