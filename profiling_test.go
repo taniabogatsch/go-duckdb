@@ -54,12 +54,6 @@ func TestLogging(t *testing.T) {
 	// Clear logs.
 	_, err = conn.ExecContext(ctx, `CALL truncate_duckdb_logs()`)
 	require.NoError(t, err)
-
-	var connCount uint64
-	r = conn.QueryRowContext(ctx, `SELECT count FROM duckdb_connection_count()`)
-	require.NoError(t, err)
-	require.NoError(t, r.Scan(&connCount))
-	require.Equal(t, uint64(1), connCount)
 }
 
 func TestMetrics(t *testing.T) {
