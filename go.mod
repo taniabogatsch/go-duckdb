@@ -3,10 +3,10 @@ module github.com/taniabogatsch/go-duckdb/v2
 go 1.24
 
 require (
-	github.com/apache/arrow-go/v18 v18.4.0
-	github.com/go-viper/mapstructure/v2 v2.3.0
+	github.com/apache/arrow-go/v18 v18.4.1
+	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/google/uuid v1.6.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 	github.com/taniabogatsch/go-duckdb/arrowmapping v0.0.10
 	github.com/taniabogatsch/go-duckdb/mapping v0.0.11
 )
